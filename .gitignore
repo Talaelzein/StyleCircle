@@ -1,0 +1,15 @@
+# Dependencies and builds
+node_modules/
+dist/
+coverage/
+.vite/
+
+# Never commit secrets
+.env
+.env.*
+!.env.example
+
+# System/editor files
+.DS_Store
+Thumbs.db
+.vscode/

@@ -1,0 +1,12 @@
+:root { font-family: Inter, ui-sans-serif, system-ui, -apple-system, Arial, sans-serif; color: #2b2829; background: #faf6f4; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+.shell { max-width: 880px; margin: 8vh auto; padding: 24px; }
+.eyebrow { color: #a5594c; letter-spacing: 0.16em; font-size: 12px; font-weight: bold; }
+h1 { font-family: Georgia, serif; font-weight: 500; font-size: clamp(42px, 8vw, 78px); margin: 10px 0; }
+h1 span { color: #b16a5b; }
+.subtitle { color: #6a5553; font-size: 24px; margin-top: 0; }
+.panel { background: white; border: 1px solid #eaded9; border-radius: 16px; padding: 30px; margin: 36px 0; box-shadow: 0 12px 25px #6e413f0a; line-height: 1.65; }
+.panel h2 { font-size: 24px; font-weight: 600; }
+a { color: #9d473b; }
+@media (max-width: 550px) { .shell { margin-top: 3vh; } .panel { padding: 20px; } }
