@@ -1,29 +1,283 @@
-import { BrowserRouter, Link, Route, Routes } from 'react-router-dom';
 
-function Home() {
-  return (
-    <main className="shell">
-      <div className="eyebrow">WEB PROGRAMMING · TEAM CAPSTONE</div>
-      <h1>Style<span>Circle</span></h1>
-      <p className="subtitle">Your social fashion closet.</p>
-      <div className="panel">
-        <h2>Milestone 1 scaffold ready</h2>
-        <p>Next: implement and test the Milestone 2 backend. The wardrobe UI will be connected during Milestone 3.</p>
-        <ul>
-          <li>React and client-side routing scaffold</li>
-          <li>Express REST API in the separate server folder</li>
-          <li>MongoDB, signup/login, JWT, and protected CRUD in the backend</li>
-        </ul>
-      </div>
-      <Link to="/about">About StyleCircle</Link>
-    </main>
-  );
-}
+import { useEffect, useState } from "react";
 
-function About() {
-  return <main className="shell"><h1>About StyleCircle</h1><p>Digital wardrobe + outfits + social polls, coming in later milestones.</p><Link to="/">Back home</Link></main>;
-}
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  Link
+} from "react-router-dom";
+
+import { API_URL } from "./services/api";
+
+import AuthPage from "./pages/AuthPage.jsx";
+import Wardrobe from "./pages/Wardrobe.jsx";
+import OutfitBuilder from "./pages/OutfitBuilder.jsx";
+import Suggestions from "./pages/Suggestions.jsx";
+import FitCheck from "./pages/FitCheck.jsx";
+
+const SESSION_KEY = "stylecircle_session";
 
 export default function App() {
-  return <BrowserRouter><Routes><Route path="/" element={<Home />} /><Route path="/about" element={<About />} /></Routes></BrowserRouter>;
+  const [session, setSession] = useState(null);
+  const [checkingSession, setCheckingSession] =
+    useState(true);
+
+  // Restore the saved login after refreshing.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function restoreSession() {
+      let savedSession;
+
+      try {
+        const saved = sessionStorage.getItem(
+          SESSION_KEY
+        );
+
+        if (!saved) return;
+
+        savedSession = JSON.parse(saved);
+
+        if (
+          !savedSession ||
+          typeof savedSession.token !== "string" ||
+          !savedSession.token
+        ) {
+          sessionStorage.removeItem(SESSION_KEY);
+          return;
+        }
+      } catch {
+        sessionStorage.removeItem(SESSION_KEY);
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `${API_URL}/api/auth/me`,
+          {
+            headers: {
+              Authorization:
+                `Bearer ${savedSession.token}`
+            }
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+
+          if (!cancelled && data.user) {
+            setSession({
+              token: savedSession.token,
+              user: data.user
+            });
+          }
+        } else if (
+          response.status === 401 ||
+          response.status === 403
+        ) {
+          sessionStorage.removeItem(SESSION_KEY);
+        }
+      } catch {
+        // Backend may be temporarily unavailable.
+      }
+    }
+
+    restoreSession().finally(() => {
+      if (!cancelled) {
+        setCheckingSession(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function handleLogin(nextSession) {
+    sessionStorage.setItem(
+      SESSION_KEY,
+      JSON.stringify(nextSession)
+    );
+
+    setSession(nextSession);
+  }
+
+  function handleLogout() {
+    sessionStorage.removeItem(SESSION_KEY);
+    setSession(null);
+  }
+
+  if (checkingSession) {
+    return (
+      <main className="shell">
+        <p>
+          Restoring your StyleCircle session...
+        </p>
+      </main>
+    );
+  }
+
+  return (
+    <BrowserRouter>
+      {session && (
+        <nav
+          aria-label="StyleCircle navigation"
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "14px",
+            padding: "16px"
+          }}
+        >
+          <Link to="/wardrobe">
+            My Closet
+          </Link>
+
+          <Link to="/outfits">
+            Outfit Builder
+          </Link>
+
+          <Link to="/suggestions">
+            Smart Mix &amp; Match
+          </Link>
+
+          <Link to="/fitchecks">
+            FitCheck
+          </Link>
+        </nav>
+      )}
+
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <Navigate
+              to={
+                session
+                  ? "/wardrobe"
+                  : "/login"
+              }
+              replace
+            />
+          }
+        />
+
+        <Route
+          path="/login"
+          element={
+            session ? (
+              <Navigate
+                to="/wardrobe"
+                replace
+              />
+            ) : (
+              <AuthPage
+                mode="login"
+                onLogin={handleLogin}
+              />
+            )
+          }
+        />
+
+        <Route
+          path="/signup"
+          element={
+            session ? (
+              <Navigate
+                to="/wardrobe"
+                replace
+              />
+            ) : (
+              <AuthPage
+                mode="signup"
+                onLogin={handleLogin}
+              />
+            )
+          }
+        />
+
+        <Route
+          path="/wardrobe"
+          element={
+            session ? (
+              <Wardrobe
+                user={session.user}
+                token={session.token}
+                onLogout={handleLogout}
+              />
+            ) : (
+              <Navigate
+                to="/login"
+                replace
+              />
+            )
+          }
+        />
+
+        <Route
+          path="/outfits"
+          element={
+            session ? (
+              <OutfitBuilder
+                user={session.user}
+                token={session.token}
+                onLogout={handleLogout}
+              />
+            ) : (
+              <Navigate
+                to="/login"
+                replace
+              />
+            )
+          }
+        />
+
+        <Route
+          path="/suggestions"
+          element={
+            session ? (
+              <Suggestions
+                token={session.token}
+              />
+            ) : (
+              <Navigate
+                to="/login"
+                replace
+              />
+            )
+          }
+        />
+
+        <Route
+          path="/fitchecks"
+          element={
+            session ? (
+              <FitCheck
+                token={session.token}
+              />
+            ) : (
+              <Navigate
+                to="/login"
+                replace
+              />
+            )
+          }
+        />
+
+        <Route
+          path="*"
+          element={
+            <Navigate
+              to="/"
+              replace
+            />
+          }
+        />
+      </Routes>
+    </BrowserRouter>
+  );
 }

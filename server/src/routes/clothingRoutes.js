@@ -1,80 +1,218 @@
-import { Router } from 'express';
-import mongoose from 'mongoose';
-import { z } from 'zod';
-import ClothingItem, { CATEGORIES } from '../models/ClothingItem.js';
-import { validateBody } from '../middleware/validate.js';
-import { requireAuth } from '../middleware/requireAuth.js';
+
+import { Router } from "express";
+import mongoose from "mongoose";
+import { z } from "zod";
+
+import ClothingItem, {
+  CATEGORIES
+} from "../models/ClothingItem.js";
+
+import { validateBody } from "../middleware/validate.js";
+import { requireAuth } from "../middleware/requireAuth.js";
 
 const router = Router();
-router.use(requireAuth); // Every clothing endpoint is private.
 
+// All wardrobe routes require a logged-in user.
+router.use(requireAuth);
+
+// Validation for creating a clothing item.
 const createSchema = z.object({
   name: z.string().trim().min(1).max(80),
   category: z.enum(CATEGORIES),
   color: z.string().trim().max(40).optional(),
-  imageUrl: z.url().max(500).refine((url) => url.startsWith('https://'), 'Use an HTTPS image URL').optional(),
-}).strict(); // Unknown fields like ownerId are REJECTED.
+  material: z.string().trim().max(50).optional(),
+  style: z.string().trim().max(50).optional(),
+  occasion: z.string().trim().max(50).optional(),
+  season: z.string().trim().max(50).optional(),
 
-const updateSchema = createSchema.partial().refine(
-  (data) => Object.keys(data).length > 0,
-  { message: 'Provide at least one field' }
-);
+  // Temporary image URL support until photo uploads are added.
+  imageUrl: z.url()
+    .max(500)
+    .refine(
+      (url) => url.startsWith("https://"),
+      "Use an HTTPS image URL"
+    )
+    .optional()
+}).strict();
 
+// Editing allows any valid combination of existing fields.
+const updateSchema = createSchema
+  .partial()
+  .refine(
+    (data) => Object.keys(data).length > 0,
+    { message: "Provide at least one field" }
+  );
+
+// Reject invalid MongoDB IDs.
 function validId(req, res, next) {
   if (!mongoose.isValidObjectId(req.params.id)) {
-    return res.status(400).json({ error: 'Invalid item ID' });
+    return res.status(400).json({
+      error: "Invalid item ID"
+    });
   }
+
   next();
 }
 
+// Treat search input as plain text, not a regular expression.
 function escapeRegex(text) {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-router.get('/', async (req, res) => {
-  const filter = { ownerId: req.userId };
+// GET /api/clothing-items
+// Return only clothing belonging to the logged-in user.
+router.get("/", async (req, res) => {
+  const filter = {
+    ownerId: req.userId
+  };
+
+  // Optional category filter.
   if (req.query.category !== undefined) {
-    if (typeof req.query.category !== 'string' || !CATEGORIES.includes(req.query.category)) {
-      return res.status(400).json({ error: 'Invalid category filter' });
+    if (
+      typeof req.query.category !== "string" ||
+      !CATEGORIES.includes(req.query.category)
+    ) {
+      return res.status(400).json({
+        error: "Invalid category filter"
+      });
     }
+
     filter.category = req.query.category;
   }
+
+  // Optional name search.
   if (req.query.search !== undefined) {
-    if (typeof req.query.search !== 'string' || req.query.search.length > 80) {
-      return res.status(400).json({ error: 'Invalid search filter' });
+    if (
+      typeof req.query.search !== "string" ||
+      req.query.search.length > 80
+    ) {
+      return res.status(400).json({
+        error: "Invalid search filter"
+      });
     }
-    filter.name = { $regex: escapeRegex(req.query.search), $options: 'i' };
+
+    const search = req.query.search.trim();
+
+    if (search) {
+      filter.name = {
+        $regex: escapeRegex(search),
+        $options: "i"
+      };
+    }
   }
 
-  const items = await ClothingItem.find(filter).sort({ createdAt: -1 }).limit(100);
-  res.json({ items });
+  const items = await ClothingItem
+    .find(filter)
+    .sort({ createdAt: -1 })
+    .limit(100);
+
+  return res.json({ items });
 });
 
-router.post('/', validateBody(createSchema), async (req, res) => {
-  const item = await ClothingItem.create({ ...req.validatedBody, ownerId: req.userId });
-  res.status(201).json({ item });
+// POST /api/clothing-items
+// Create a new clothing item for the logged-in user.
+router.post(
+  "/",
+  validateBody(createSchema),
+  async (req, res) => {
+    const item = await ClothingItem.create({
+      ...req.validatedBody,
+      ownerId: req.userId
+    });
+
+    return res.status(201).json({ item });
+  }
+);
+
+// GET /api/clothing-items/:id
+router.get("/:id", validId, async (req, res) => {
+  const item = await ClothingItem.findOne({
+    _id: req.params.id,
+    ownerId: req.userId
+  });
+
+  if (!item) {
+    return res.status(404).json({
+      error: "Item not found"
+    });
+  }
+
+  return res.json({ item });
 });
 
-router.get('/:id', validId, async (req, res) => {
-  const item = await ClothingItem.findOne({ _id: req.params.id, ownerId: req.userId });
-  if (!item) return res.status(404).json({ error: 'Item not found' });
-  res.json({ item });
+// PATCH /api/clothing-items/:id
+// Update only clothing belonging to the logged-in user.
+router.patch(
+  "/:id",
+  validId,
+  validateBody(updateSchema),
+  async (req, res) => {
+    const item = await ClothingItem.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        ownerId: req.userId
+      },
+      {
+        $set: req.validatedBody
+      },
+      {
+        new: true,
+        runValidators: true
+      }
+    );
+
+    if (!item) {
+      return res.status(404).json({
+        error: "Item not found"
+      });
+    }
+
+    return res.json({ item });
+  }
+);
+
+// DELETE /api/clothing-items/:id
+// Delete only clothing belonging to the logged-in user.
+
+router.delete("/:id", validId, async (req, res) => {
+  // Delete only an item belonging to the logged-in user.
+  const item = await ClothingItem.findOneAndDelete({
+    _id: req.params.id,
+    ownerId: req.userId
+  });
+
+  if (!item) {
+    return res.status(404).json({
+      error: "Item not found"
+    });
+  }
+
+  // Also delete its photo from MongoDB GridFS.
+  if (
+    item.imagePublicId &&
+    mongoose.isValidObjectId(item.imagePublicId)
+  ) {
+    try {
+      const bucket = new mongoose.mongo.GridFSBucket(
+        mongoose.connection.db,
+        { bucketName: "clothingImages" }
+      );
+
+      await bucket.delete(
+        new mongoose.Types.ObjectId(item.imagePublicId)
+      );
+    } catch (error) {
+      // The clothing item is already deleted.
+      // Log a cleanup problem without crashing the request.
+      console.error(
+        "Could not delete clothing photo:",
+        error.message
+      );
+    }
+  }
+
+  return res.status(204).end();
 });
 
-router.patch('/:id', validId, validateBody(updateSchema), async (req, res) => {
-  const item = await ClothingItem.findOneAndUpdate(
-    { _id: req.params.id, ownerId: req.userId },
-    { $set: req.validatedBody },
-    { new: true, runValidators: true }
-  );
-  if (!item) return res.status(404).json({ error: 'Item not found' });
-  res.json({ item });
-});
-
-router.delete('/:id', validId, async (req, res) => {
-  const item = await ClothingItem.findOneAndDelete({ _id: req.params.id, ownerId: req.userId });
-  if (!item) return res.status(404).json({ error: 'Item not found' });
-  res.status(204).end();
-});
 
 export default router;
