@@ -1,25 +1,41 @@
 
-import { useEffect, useState } from "react";
-import { API_URL, getResponseData } from "../services/api";
+import { useEffect, useRef, useState } from "react";
 
-// Displays and uploads the photo of one clothing item.
+import {
+  API_URL,
+  getResponseData
+} from "../services/api";
+
+import {
+  compressImage,
+  formatFileSize,
+  MAX_ORIGINAL_SIZE
+} from "../utils/compressImage.js";
+
 export default function ClothingPhoto({ item, token }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [photoUrl, setPhotoUrl] = useState("");
-  const [uploading, setUploading] = useState(false);
+  const [processing, setProcessing] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [photoVersion, setPhotoVersion] = useState(0);
+  const [compressionInfo, setCompressionInfo] =
+    useState(null);
 
-  // Load the private photo using the user's login token.
+  const [photoVersion, setPhotoVersion] = useState(0);
+  const [localRemoved,setLocalRemoved] = useState(false);
+  const fileInputRef = useRef(null);
+
+  // Retrieve the private photo from the backend.
   useEffect(() => {
     const controller = new AbortController();
     let objectUrl = "";
 
     async function loadPhoto() {
       setPhotoUrl("");
+      if(localRemoved) return;
 
       if (!item.imagePublicId && photoVersion === 0) {
+        if(item.imageUrl?.startsWith("https://")) setPhotoUrl(item.imageUrl);
         return;
       }
 
@@ -35,16 +51,16 @@ export default function ClothingPhoto({ item, token }) {
         );
 
         if (!response.ok) {
-          throw new Error("Could not load clothing photo");
+          throw new Error(
+            "Could not load clothing photo."
+          );
         }
 
-        const imageBlob = await response.blob();
+        const blob = await response.blob();
 
-        if (controller.signal.aborted) {
-          return;
-        }
+        if (controller.signal.aborted) return;
 
-        objectUrl = URL.createObjectURL(imageBlob);
+        objectUrl = URL.createObjectURL(blob);
         setPhotoUrl(objectUrl);
       } catch (err) {
         if (!controller.signal.aborted) {
@@ -62,14 +78,21 @@ export default function ClothingPhoto({ item, token }) {
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [item._id, item.imagePublicId, token, photoVersion]);
+  }, [
+    item._id,
+    item.imagePublicId,
+    item.imageUrl,
+    token,
+    photoVersion,
+    localRemoved
+  ]);
 
-  // Select an image from the computer.
   function handleFileChange(event) {
     const file = event.target.files?.[0];
 
     setError("");
     setSuccess("");
+    setCompressionInfo(null);
     setSelectedFile(null);
 
     if (!file) return;
@@ -81,36 +104,55 @@ export default function ClothingPhoto({ item, token }) {
     ];
 
     if (!allowedTypes.includes(file.type)) {
-      setError("Please choose a JPG, PNG, or WebP image.");
+      setError(
+        "Please choose a JPG, PNG, or WebP image."
+      );
       return;
     }
 
-    if (file.size > 2 * 1024 * 1024) {
-      setError("The image must be smaller than 2 MB.");
+    if (file.size > MAX_ORIGINAL_SIZE) {
+      setError(
+        "Please choose a photo smaller than 10 MB."
+      );
       return;
     }
 
     setSelectedFile(file);
   }
 
-  // Upload the selected image to Express and MongoDB.
   async function handleUpload(event) {
     event.preventDefault();
 
-    if (!selectedFile) {
-      setError("Please select an image first.");
-      return;
-    }
+    if (!selectedFile || processing) return;
 
-    setUploading(true);
     setError("");
     setSuccess("");
+    setCompressionInfo(null);
 
     try {
+      // First compress the original image.
+      setProcessing("compressing");
+
+      const compressed = await compressImage(
+        selectedFile
+      );
+
+      setCompressionInfo({
+        originalSize: compressed.originalSize,
+        compressedSize: compressed.compressedSize,
+        width: compressed.width,
+        height: compressed.height
+      });
+
+      // Then upload the smaller WebP image.
+      setProcessing("uploading");
+
       const formData = new FormData();
 
-      // Must match upload.single("image") in Express.
-      formData.append("image", selectedFile);
+      formData.append(
+        "image",
+        compressed.file
+      );
 
       const response = await fetch(
         `${API_URL}/api/images/clothing/${item._id}`,
@@ -125,16 +167,39 @@ export default function ClothingPhoto({ item, token }) {
 
       await getResponseData(response);
 
-      setSelectedFile(null);
-      setSuccess("Photo uploaded successfully!");
+      setSuccess(
+        "Photo compressed and uploaded successfully!"
+      );
 
-      // Reload the image from MongoDB.
-      setPhotoVersion((previous) => previous + 1);
+      setSelectedFile(null);
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+
+      setLocalRemoved(false);
+      // Refresh the photo from MongoDB.
+      setPhotoVersion(
+        (previous) => previous + 1
+      );
     } catch (err) {
-      setError(err.message);
+      setError(
+        err.message || "Could not upload photo."
+      );
     } finally {
-      setUploading(false);
+      setProcessing("");
     }
+  }
+
+
+  async function removePhoto() {
+    if (!window.confirm("Remove this clothing photo? The item will stay in your closet.")) return;
+    setError("");setSuccess("");setProcessing("removing");
+    try {
+      const response=await fetch(`${API_URL}/api/images/clothing/${item._id}`,{method:"DELETE",headers:{Authorization:`Bearer ${token}`}});
+      if(!response.ok) await getResponseData(response);
+      setLocalRemoved(true);setPhotoUrl("");setSuccess("Photo removed. Refresh the closet to update the item.");
+    } catch(e) {setError(e.message);} finally {setProcessing("");}
   }
 
   return (
@@ -156,27 +221,87 @@ export default function ClothingPhoto({ item, token }) {
         <p>No clothing photo yet.</p>
       )}
 
+      {photoUrl && <button type="button" disabled={Boolean(processing)} onClick={removePhoto}>Remove Photo</button>}
       <form onSubmit={handleUpload}>
         <label>
-          {photoUrl ? "Change photo" : "Add photo"}
+          {photoUrl
+            ? "Change photo"
+            : "Add photo"}
 
           <input
+            ref={fileInputRef}
             type="file"
             accept="image/jpeg,image/png,image/webp"
+            capture={undefined}
             onChange={handleFileChange}
+            disabled={Boolean(processing)}
           />
         </label>
 
+        {selectedFile && (
+          <p>
+            Selected: {selectedFile.name}
+            {" — "}
+            {formatFileSize(selectedFile.size)}
+          </p>
+        )}
+
         <button
           type="submit"
-          disabled={uploading || !selectedFile}
+          disabled={
+            Boolean(processing) ||
+            !selectedFile
+          }
         >
-          {uploading ? "Uploading..." : "Upload Photo"}
+          {processing === "compressing"
+            ? "Compressing..."
+            : processing === "uploading"
+              ? "Uploading..."
+              : "Upload Photo"}
         </button>
       </form>
+      <label style={{display:'block',marginTop:10,fontSize:'.78rem'}}>Take a photo using your phone camera
+        <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={handleFileChange} disabled={Boolean(processing)} style={{display:'block',marginTop:6}}/>
+      </label>
+
+      {compressionInfo && (
+        <div>
+          <p>
+            Original size:{" "}
+            {formatFileSize(
+              compressionInfo.originalSize
+            )}
+          </p>
+
+          <p>
+            Compressed size:{" "}
+            {formatFileSize(
+              compressionInfo.compressedSize
+            )}
+          </p>
+
+          <p>
+            Image dimensions:{" "}
+            {compressionInfo.width}
+            {" × "}
+            {compressionInfo.height}
+          </p>
+        </div>
+      )}
+
+      {processing && (
+        <p role="status">
+          {processing === "compressing"
+            ? "Optimizing your photo..."
+            : "Saving your photo to My Closet..."}
+        </p>
+      )}
 
       {error && (
-        <p className="error" role="alert">
+        <p
+          className="error"
+          role="alert"
+        >
           {error}
         </p>
       )}

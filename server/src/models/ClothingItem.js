@@ -7,7 +7,9 @@ export const CATEGORIES = [
   "outerwear",
   "shoes",
   "bag",
-  "accessory"
+  "accessory",
+  "jewelry",
+  "glasses"
 ];
 
 const clothingItemSchema = new mongoose.Schema(
@@ -62,6 +64,12 @@ const clothingItemSchema = new mongoose.Schema(
       default: ""
     },
 
+    brand: { type: String, trim: true, maxlength: 80, default: "" },
+    size: { type: String, trim: true, maxlength: 40, default: "" },
+    price: { type: Number, min: 0, default: 0 },
+    purchaseDate: { type: String, trim: true, default: "" },
+    favorite: { type: Boolean, default: false },
+    sourceUrl: { type: String, trim: true, default: "" },
     // IMAGE FIELDS FOR FUTURE PHOTO UPLOAD
     imageUrl: {
       type: String,

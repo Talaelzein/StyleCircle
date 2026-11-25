@@ -1,0 +1,47 @@
+/* Change the StyleCircle palette, radius and typography here. */
+:root {
+  font-family: 'DM Sans', Arial, sans-serif;
+  font-synthesis: none;
+  color: #22201d;
+  background: #faf6ef;
+  --paper: #faf6ef;
+  --paper-deep: #f0e6d8;
+  --card: #fffaf4;
+  --ink: #22201d;
+  --muted: #6d665e;
+  --accent: #8a3040;
+  --accent-soft: #f4dbd7;
+  --line: #dfd5c9;
+  --serif: 'Playfair Display', Georgia, serif;
+  --sans: 'DM Sans', Arial, sans-serif;
+  --radius: 18px;
+  --page-max: 1376px;
+}
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; min-width: 320px; color: var(--ink); background: var(--paper);
+  background-image: radial-gradient(circle at 10% 5%, rgba(248,216,200,.18), transparent 31rem),radial-gradient(circle at 92% 78%, rgba(217,190,166,.1), transparent 35rem);
+  -webkit-font-smoothing: antialiased; }
+button, input, select, textarea { font: inherit; }
+button, a { -webkit-tap-highlight-color: transparent; }
+button { cursor: pointer; }
+a { color: inherit; }
+img { max-width: 100%; }
+:focus-visible { outline: 3px solid #9a3b52; outline-offset: 3px; }
+h1,h2,h3,h4 { font-family: var(--serif); font-weight: 500; letter-spacing: -.045em; }
+h1 { font-size: clamp(3.1rem,6.2vw,6.3rem); line-height: 1.12; }
+h2 { font-size: clamp(2rem,3.7vw,3.55rem); line-height: 1.2; }
+h3 { font-size: 1.5rem; }
+p { line-height: 1.58; }
+.eyebrow { font-family: var(--sans); font-size: .68rem; font-weight: 700; letter-spacing: .3em; color: var(--accent); }
+.button-primary, .button-outline, .text-button { display: inline-flex; justify-content: center; align-items: center; gap: 18px;
+  white-space: nowrap; border-radius: 50px; text-decoration: none; font-family: var(--sans); font-size: .91rem;
+  font-weight: 600; padding: 13px 25px; min-height: 47px; line-height: 1.2; cursor:pointer; transition: background .2s, transform .2s, color .2s; }
+.button-primary { background:var(--ink);color:white;border:1px solid var(--ink); }
+.button-primary:hover { background:var(--accent);border-color:var(--accent);transform:translateY(-2px); }
+.button-outline { background:transparent;color:var(--ink);border:1px solid var(--ink); }
+.button-outline:hover { background:var(--ink);color:white;transform:translateY(-2px); }
+.text-button {border:0;background:none;padding:8px;color:var(--muted);font-size:.82rem;}
+.text-button:hover {color:var(--accent);}
+.text-link {font-size:.87rem;text-decoration:underline;text-underline-offset:4px;text-decoration-thickness:1px;}
+.text-link:hover {color:var(--accent);}

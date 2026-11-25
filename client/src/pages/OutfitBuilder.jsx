@@ -1,17 +1,21 @@
 
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+
 import {
   API_URL,
   getResponseData
 } from "../services/api";
 
-const EMPTY_FORM = {
+import ClothingPreview from "../components/ClothingPreview.jsx";
+import useDraftState from "../hooks/useDraftState.js";
+
+const emptyForm = () => ({
   name: "",
   occasion: "",
   notes: "",
   clothingItemIds: []
-};
+});
 
 export default function OutfitBuilder({
   user,
@@ -21,11 +25,9 @@ export default function OutfitBuilder({
   const [clothes, setClothes] = useState([]);
   const [outfits, setOutfits] = useState([]);
 
-  const [form, setForm] = useState({
-    ...EMPTY_FORM
-  });
-
-  const [editingId, setEditingId] = useState(null);
+  const draft=`stylecircle-draft:${user.id}:outfits`;
+  const [form, setForm] = useDraftState(`${draft}:form`,emptyForm);
+  const [editingId, setEditingId] = useDraftState(`${draft}:editingId`,null);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -34,7 +36,6 @@ export default function OutfitBuilder({
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
-  // Load the user's clothing items and saved outfits.
   useEffect(() => {
     const controller = new AbortController();
 
@@ -53,7 +54,6 @@ export default function OutfitBuilder({
               headers,
               signal: controller.signal
             }),
-
             fetch(`${API_URL}/api/outfits`, {
               headers,
               signal: controller.signal
@@ -83,12 +83,9 @@ export default function OutfitBuilder({
 
     loadData();
 
-    return () => {
-      controller.abort();
-    };
+    return () => controller.abort();
   }, [token]);
 
-  // Update name, occasion, or notes.
   function handleChange(event) {
     const { name, value } = event.target;
 
@@ -98,7 +95,6 @@ export default function OutfitBuilder({
     }));
   }
 
-  // Select or unselect a clothing item.
   function toggleClothing(id) {
     setError("");
     setMessage("");
@@ -126,17 +122,11 @@ export default function OutfitBuilder({
     });
   }
 
-  // Reset the form after saving or canceling.
   function resetForm() {
-    setForm({
-      ...EMPTY_FORM,
-      clothingItemIds: []
-    });
-
+    setForm(emptyForm());
     setEditingId(null);
   }
 
-  // Save a new outfit or update an existing one.
   async function handleSave(event) {
     event.preventDefault();
 
@@ -152,9 +142,7 @@ export default function OutfitBuilder({
       form.clothingItemIds.length < 2 ||
       form.clothingItemIds.length > 10
     ) {
-      setError(
-        "Choose between 2 and 10 clothing items."
-      );
+      setError("Choose between 2 and 10 items.");
       return;
     }
 
@@ -212,7 +200,6 @@ export default function OutfitBuilder({
     }
   }
 
-  // Load an existing outfit into the form.
   function handleEdit(outfit) {
     const availableIds = new Set(
       clothes.map((item) => item._id)
@@ -246,7 +233,6 @@ export default function OutfitBuilder({
     });
   }
 
-  // Delete a saved outfit.
   async function handleDelete(id) {
     if (
       !window.confirm(
@@ -307,8 +293,8 @@ export default function OutfitBuilder({
         </p>
 
         <p>
-          Create your perfect look using clothes
-          from your wardrobe.
+          Create your perfect look using
+          pieces from My Closet.
         </p>
 
         <nav style={{ marginBottom: "20px" }}>
@@ -345,6 +331,7 @@ export default function OutfitBuilder({
             >
               <label>
                 Outfit Name
+
                 <input
                   type="text"
                   name="name"
@@ -358,18 +345,20 @@ export default function OutfitBuilder({
 
               <label>
                 Occasion
+
                 <input
                   type="text"
                   name="occasion"
                   value={form.occasion}
                   onChange={handleChange}
-                  placeholder="e.g. University, Party, Dinner"
+                  placeholder="University, Party, Dinner..."
                   maxLength={60}
                 />
               </label>
 
               <label>
                 Notes
+
                 <textarea
                   name="notes"
                   value={form.notes}
@@ -383,8 +372,7 @@ export default function OutfitBuilder({
               <h3>Select Your Clothes</h3>
 
               <p>
-                Selected:{" "}
-                {form.clothingItemIds.length}/10
+                Selected: {form.clothingItemIds.length}/10
                 {" "}(minimum 2)
               </p>
 
@@ -395,14 +383,16 @@ export default function OutfitBuilder({
                   {" "}
                   <Link to="/wardrobe">
                     Add clothes to My Closet
-                  </Link>
+                  </Link>.
                 </p>
               )}
 
               <div
                 style={{
                   display: "grid",
-                  gap: "10px",
+                  gridTemplateColumns:
+                    "repeat(auto-fill, minmax(190px, 1fr))",
+                  gap: "12px",
                   marginBottom: "20px"
                 }}
               >
@@ -420,37 +410,49 @@ export default function OutfitBuilder({
                     <label
                       key={item._id}
                       style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "12px",
                         padding: "12px",
                         border: selected
                           ? "2px solid #7c3aed"
                           : "1px solid #ddd",
-                        borderRadius: "10px",
+                        borderRadius: "12px",
                         cursor: disabled
                           ? "not-allowed"
                           : "pointer",
                         opacity: disabled ? 0.6 : 1
                       }}
                     >
-                      <input
-                        type="checkbox"
-                        checked={selected}
-                        disabled={disabled}
-                        onChange={() =>
-                          toggleClothing(item._id)
-                        }
-                      />
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "12px",
+                          marginBottom: "10px"
+                        }}
+                      >
+                        <ClothingPreview
+                          item={item}
+                          token={token}
+                          size={90}
+                        />
 
-                      <span>
-                        <strong>{item.name}</strong>
-                        {" — "}
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          disabled={disabled}
+                          onChange={() =>
+                            toggleClothing(item._id)
+                          }
+                        />
+                      </div>
+
+                      <strong>{item.name}</strong>
+
+                      <p>
                         {item.category}
                         {item.color
                           ? ` — ${item.color}`
                           : ""}
-                      </span>
+                      </p>
                     </label>
                   );
                 })}
@@ -473,8 +475,8 @@ export default function OutfitBuilder({
               {editingId && (
                 <button
                   type="button"
-                  onClick={resetForm}
                   disabled={saving}
+                  onClick={resetForm}
                 >
                   Cancel Editing
                 </button>
@@ -490,68 +492,111 @@ export default function OutfitBuilder({
                 You haven't saved any outfits yet.
               </p>
             ) : (
-              <div>
-                {outfits.map((outfit) => (
-                  <div
-                    className="clothing-card"
-                    key={outfit._id}
-                  >
-                    <h3>{outfit.name}</h3>
+              <div
+                style={{
+                  display: "grid",
+                  gap: "18px"
+                }}
+              >
+                {outfits.map((outfit) => {
+                  const pieces = (
+                    outfit.clothingItemIds || []
+                  ).filter(Boolean);
 
-                    <p>
-                      <strong>Occasion:</strong>{" "}
-                      {outfit.occasion ||
-                        "Not specified"}
-                    </p>
+                  return (
+                    <article
+                      className="clothing-card"
+                      key={outfit._id}
+                    >
+                      <h3>{outfit.name}</h3>
 
-                    {outfit.notes && (
                       <p>
-                        <strong>Notes:</strong>{" "}
-                        {outfit.notes}
+                        <strong>Occasion:</strong>{" "}
+                        {outfit.occasion ||
+                          "Not specified"}
                       </p>
-                    )}
 
-                    <h4>Clothing Pieces</h4>
+                      {outfit.notes && (
+                        <p>
+                          <strong>Notes:</strong>{" "}
+                          {outfit.notes}
+                        </p>
+                      )}
 
-                    <ul>
-                      {(
-                        outfit.clothingItemIds || []
-                      )
-                        .filter(Boolean)
-                        .map((item) => (
-                          <li key={item._id}>
-                            {item.name} —{" "}
-                            {item.category}
-                          </li>
+                      <h4>Clothing Pieces</h4>
+
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns:
+                            "repeat(auto-fill, minmax(130px, 1fr))",
+                          gap: "12px",
+                          marginBottom: "16px"
+                        }}
+                      >
+                        {pieces.map((item) => (
+                          <div
+                            key={item._id}
+                            style={{
+                              padding: "10px",
+                              border: "1px solid #ddd",
+                              borderRadius: "12px"
+                            }}
+                          >
+                            <ClothingPreview
+                              item={item}
+                              token={token}
+                              size={110}
+                            />
+
+                            <p>
+                              <strong>{item.name}</strong>
+                            </p>
+
+                            <p>
+                              {item.category}
+                              {item.color
+                                ? ` — ${item.color}`
+                                : ""}
+                            </p>
+                          </div>
                         ))}
-                    </ul>
+                      </div>
 
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleEdit(outfit)
-                      }
-                    >
-                      Edit
-                    </button>
+                      {pieces.length === 0 && (
+                        <p>
+                          The clothing items for this
+                          outfit are no longer available.
+                        </p>
+                      )}
 
-                    {" "}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleEdit(outfit)
+                        }
+                      >
+                        Edit
+                      </button>
 
-                    <button
-                      type="button"
-                      disabled={
-                        deletingId === outfit._id
-                      }
-                      onClick={() =>
-                        handleDelete(outfit._id)
-                      }
-                    >
-                      {deletingId === outfit._id
-                        ? "Deleting..."
-                        : "Delete"}
-                    </button>
-                  </div>
-                ))}
+                      {" "}
+
+                      <button
+                        type="button"
+                        disabled={
+                          deletingId === outfit._id
+                        }
+                        onClick={() =>
+                          handleDelete(outfit._id)
+                        }
+                      >
+                        {deletingId === outfit._id
+                          ? "Deleting..."
+                          : "Delete"}
+                      </button>
+                    </article>
+                  );
+                })}
               </div>
             )}
           </>

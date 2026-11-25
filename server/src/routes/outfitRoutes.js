@@ -79,7 +79,7 @@ function populateClothing(query, ownerId) {
     path: "clothingItemIds",
     match: { ownerId },
     select:
-      "name category color material style occasion season imageUrl imagePublicId"
+      "name category color material style occasion season brand size price favorite imageUrl imagePublicId"
   });
 }
 
@@ -127,7 +127,7 @@ router.post(
       path: "clothingItemIds",
       match: { ownerId: req.userId },
       select:
-        "name category color material style occasion season imageUrl imagePublicId"
+        "name category color material style occasion season brand size price favorite imageUrl imagePublicId"
     });
 
     res.status(201).json({
@@ -205,7 +205,7 @@ router.patch(
       path: "clothingItemIds",
       match: { ownerId: req.userId },
       select:
-        "name category color material style occasion season imageUrl imagePublicId"
+        "name category color material style occasion season brand size price favorite imageUrl imagePublicId"
     });
 
     res.json({

@@ -1,13 +1,14 @@
 
-import { useEffect, useState } from "react";
-import {
-  API_URL,
-  wardrobeUrl,
-  getResponseData
-} from "../services/api";
+import { useEffect, useRef, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import CategoryCard from "../components/wardrobe/CategoryCard.jsx";
+import { closetCategories, illustrationUrl } from "../data/categories.js";
+import { API_URL, wardrobeUrl,getResponseData } from "../services/api";
 
 import ClothingFields from "../components/ClothingFields.jsx";
 import ClothingPhoto from "../components/ClothingPhoto.jsx";
+import useDraftState from "../hooks/useDraftState.js";
+import "../styles/collections.css";
 
 const CATEGORIES = [
   "top",
@@ -16,7 +17,9 @@ const CATEGORIES = [
   "outerwear",
   "shoes",
   "bag",
-  "accessory"
+  "accessory",
+  "jewelry",
+  "glasses"
 ];
 
 const EMPTY_CLOTHING = {
@@ -26,29 +29,41 @@ const EMPTY_CLOTHING = {
   material: "",
   style: "",
   occasion: "",
-  season: ""
+  season: "", brand:"", size:"", price:0, purchaseDate:"", favorite:false, sourceUrl:"", imageUrl:""
 };
 
 export default function Wardrobe({ user, token, onLogout }) {
+  const { category: categorySlug } = useParams();
+  const selectedCategory = closetCategories.find((entry) => entry.key === categorySlug);
+  const addPanelRef = useRef(null);
+  const draft=`stylecircle-draft:${user.id}:wardrobe`;
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [addForm, setAddForm] = useState({
-    ...EMPTY_CLOTHING
-  });
+  const [addForm, setAddForm] = useDraftState(`${draft}:addForm`,{...EMPTY_CLOTHING});
+  const [addPanelOpen,setAddPanelOpen]=useDraftState(`${draft}:addPanelOpen`,false);
   const [adding, setAdding] = useState(false);
 
-  const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({
-    ...EMPTY_CLOTHING
-  });
+  const [editingId, setEditingId] = useDraftState(`${draft}:editingId`,null);
+  const [editForm, setEditForm] = useDraftState(`${draft}:editForm`,{...EMPTY_CLOTHING});
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
 
-  const [searchText, setSearchText] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("");
-  const [activeFilters, setActiveFilters] = useState({
+  const [searchText, setSearchText] = useDraftState(`${draft}:searchText`,"");
+  const [categoryFilter, setCategoryFilter] = useDraftState(`${draft}:categoryFilter`,"");
+  useEffect(() => {
+    if (categorySlug) setAddForm((previous) => ({ ...previous, category: categorySlug }));
+  }, [categorySlug]);
+
+  function openAddPanel() {
+    if (!addPanelRef.current) return;
+    addPanelRef.current.open = true;
+    setAddPanelOpen(true);
+    addPanelRef.current.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }
+
+  const [activeFilters, setActiveFilters] = useDraftState(`${draft}:filters`,{
     search: "",
     category: ""
   });
@@ -81,7 +96,7 @@ export default function Wardrobe({ user, token, onLogout }) {
         setError("");
 
         const response = await fetch(
-          wardrobeUrl(activeFilters),
+          wardrobeUrl({ ...activeFilters, category: categorySlug || activeFilters.category }),
           {
             headers: {
               Authorization: `Bearer ${token}`
@@ -109,12 +124,12 @@ export default function Wardrobe({ user, token, onLogout }) {
     loadItems();
 
     return () => controller.abort();
-  }, [token, activeFilters]);
+  }, [token, activeFilters, categorySlug]);
 
   // Refresh wardrobe after adding or editing clothes.
   async function refreshWardrobe() {
     const response = await fetch(
-      wardrobeUrl(activeFilters),
+      wardrobeUrl({ ...activeFilters, category: categorySlug || activeFilters.category }),
       {
         headers: {
           Authorization: `Bearer ${token}`
@@ -127,7 +142,8 @@ export default function Wardrobe({ user, token, onLogout }) {
   }
 
   function changeAddForm(event) {
-    const { name, value } = event.target;
+    const { name } = event.target;
+    const value = name==="favorite" ? event.target.checked : name==="price" ? Number(event.target.value)||0 : event.target.value;
 
     setAddForm((previous) => ({
       ...previous,
@@ -136,7 +152,8 @@ export default function Wardrobe({ user, token, onLogout }) {
   }
 
   function changeEditForm(event) {
-    const { name, value } = event.target;
+    const { name } = event.target;
+    const value = name==="favorite" ? event.target.checked : name==="price" ? Number(event.target.value)||0 : event.target.value;
 
     setEditForm((previous) => ({
       ...previous,
@@ -167,7 +184,7 @@ export default function Wardrobe({ user, token, onLogout }) {
       await getResponseData(response);
       await refreshWardrobe();
 
-      setAddForm({ ...EMPTY_CLOTHING });
+      setAddForm({ ...EMPTY_CLOTHING, category: categorySlug || "top" });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -187,7 +204,8 @@ export default function Wardrobe({ user, token, onLogout }) {
       material: item.material || "",
       style: item.style || "",
       occasion: item.occasion || "",
-      season: item.season || ""
+      season: item.season || "", brand:item.brand||"",size:item.size||"", price:item.price||0,
+      purchaseDate:item.purchaseDate||"", favorite:Boolean(item.favorite),sourceUrl:item.sourceUrl||"", imageUrl:item.imageUrl||""
     });
   }
 
@@ -263,217 +281,94 @@ export default function Wardrobe({ user, token, onLogout }) {
     }
   }
 
+  const filteredItems = Array.isArray(items) ? items : [];
+  const cardCounts = Object.fromEntries(CATEGORIES.map((key) => [key, filteredItems.filter((item) => item.category === key).length]));
+  if (categorySlug && !selectedCategory) return (
+    <main className="editorial-page"><Link to="/wardrobe" className="text-link">← Back to My Closet</Link><h1>Category not found.</h1></main>
+  );
+
   return (
-    <main className="shell">
-      <h1>
-        Style<span>Circle</span>
-      </h1>
-
-      <div className="panel">
-        <h2>{user.username}'s Closet</h2>
-        <p>Organize your personal wardrobe.</p>
-
-        <h3>Add a Clothing Item</h3>
-
-        <form
-          className="auth-form"
-          onSubmit={handleAddClothing}
-        >
-          <ClothingFields
-            form={addForm}
-            onChange={changeAddForm}
-            categories={CATEGORIES}
-          />
-
-          <button type="submit" disabled={adding}>
-            {adding ? "Adding..." : "+ Add Clothing"}
-          </button>
-        </form>
-
-        <hr />
-
-        <h3>Search My Closet</h3>
-
-        <form
-          className="auth-form"
-          onSubmit={handleFilterSubmit}
-        >
-          <label className="closet-field">
-            Search by clothing name
-            <input
-              type="search"
-              value={searchText}
-              onChange={(event) =>
-                setSearchText(event.target.value)
-              }
-              placeholder="e.g. shirt"
-              maxLength={80}
-            />
-          </label>
-
-          <label className="closet-field">
-            Category
-            <select
-              value={categoryFilter}
-              onChange={(event) =>
-                setCategoryFilter(event.target.value)
-              }
-            >
-              <option value="">All categories</option>
-
-              {CATEGORIES.map((category) => (
-                <option key={category} value={category}>
-                  {category.charAt(0).toUpperCase() +
-                    category.slice(1)}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <button type="submit">Search</button>
-
-          <button
-            type="button"
-            onClick={clearFilters}
-          >
-            Clear Filters
-          </button>
-        </form>
-
-        <h3>My Clothing Items</h3>
-
-        {loading && (
-          <p>Loading your clothes...</p>
-        )}
-
-        {error && (
-          <p className="error" role="alert">
-            {error}
-          </p>
-        )}
-
-        {!loading &&
-          items.length === 0 &&
-          !error && (
-            <p>
-              {activeFilters.search ||
-              activeFilters.category
-                ? "No clothing items match your filters."
-                : "Your closet is empty. Add your first item!"}
-            </p>
-          )}
-
-        {!loading &&
-          items.map((item) => (
-            <div
-              className="clothing-card"
-              key={item._id}
-            >
-              {editingId === item._id ? (
-                <form
-                  className="auth-form"
-                  onSubmit={handleUpdateClothing}
-                >
-                  <h3>Edit Clothing</h3>
-
-                  <ClothingFields
-                    form={editForm}
-                    onChange={changeEditForm}
-                    categories={CATEGORIES}
-                  />
-
-                  <button
-                    type="submit"
-                    disabled={saving}
-                  >
-                    {saving
-                      ? "Saving..."
-                      : "Save Changes"}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={cancelEditing}
-                    disabled={saving}
-                  >
-                    Cancel
-                  </button>
-                </form>
-              ) : (
-                <>
-                  <h3>{item.name}</h3>
-
-                  {/* CLOTHING PHOTO UPLOAD */}
-                  <ClothingPhoto
-                    item={item}
-                    token={token}
-                  />
-
-                  <p>
-                    Category: {item.category}
-                  </p>
-
-                  <p>
-                    Color:{" "}
-                    {item.color || "Not specified"}
-                  </p>
-
-                  <p>
-                    Material:{" "}
-                    {item.material || "Not specified"}
-                  </p>
-
-                  <p>
-                    Style:{" "}
-                    {item.style || "Not specified"}
-                  </p>
-
-                  <p>
-                    Occasion:{" "}
-                    {item.occasion || "Not specified"}
-                  </p>
-
-                  <p>
-                    Season:{" "}
-                    {item.season || "Not specified"}
-                  </p>
-
-                  <button
-                    type="button"
-                    onClick={() => startEditing(item)}
-                  >
-                    Edit
-                  </button>
-
-                  {" "}
-
-                  <button
-                    type="button"
-                    disabled={
-                      deletingId === item._id
-                    }
-                    onClick={() =>
-                      handleDeleteClothing(item._id)
-                    }
-                  >
-                    {deletingId === item._id
-                      ? "Deleting..."
-                      : "Delete"}
-                  </button>
-                </>
-              )}
+    <main className="editorial-page wardrobe-page">
+      {!categorySlug ? (
+        <>
+          <section className="page-heading">
+            <div>
+              <p className="eyebrow">MY CLOSET</p>
+              <h1>Browse Your Closet</h1>
+              <p>Your personal wardrobe, organized your way. Start with an illustration, discover the real pieces inside.</p>
             </div>
-          ))}
-
-        <hr />
-
-        <button
-          type="button"
-          onClick={onLogout}
-        >
-          Log Out
-        </button>
-      </div>
+            <button type="button" onClick={openAddPanel} className="button-primary">+ Add an Item</button>
+          </section>
+          {error && <p className="error" role="alert">{error}</p>}
+          <div className="wardrobe-category-grid">
+            {closetCategories.map((category) => (
+              <CategoryCard key={category.key} category={category} count={!loading ? cardCounts[category.key] : undefined} />
+            ))}
+          </div>
+        </>
+      ) : (
+        <>
+          <Link to="/wardrobe" className="text-link back-link">← All categories</Link>
+          <section className="category-detail-heading">
+            <img src={illustrationUrl(selectedCategory.art)} alt="" />
+            <div>
+              <p className="eyebrow">MY CLOSET / {selectedCategory.label.toUpperCase()}</p>
+              <h1>{selectedCategory.label}</h1>
+              <p>All your pieces in one place. Browse, upload photos, and create your next look.</p>
+              <button type="button" onClick={openAddPanel} className="button-outline">+ Add to this collection</button>
+            </div>
+          </section>
+          <section className="wardrobe-items-section" aria-label={`${selectedCategory.label} clothing items`}>
+            <div className="section-heading">
+              <div><p className="eyebrow">YOUR PERSONAL COLLECTION</p><h2>{loading ? "Loading your pieces…" : `${filteredItems.length} piece${filteredItems.length === 1 ? "" : "s"}`}</h2></div>
+              <Link to="/outfits" className="button-outline">Build an Outfit →</Link>
+            </div>
+            <form className="wardrobe-filter-bar" onSubmit={handleFilterSubmit}>
+              <label htmlFor="wardrobe-search">Search clothes</label>
+              <input id="wardrobe-search" type="search" value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="Search by name…" maxLength={80} />
+              <button type="submit" className="button-primary">Search</button>
+              <button type="button" className="button-outline" onClick={clearFilters}>Clear</button>
+            </form>
+            {error && <p className="error" role="alert">{error}</p>}
+            {!loading && !filteredItems.length && !error && <div className="empty-state"><h3>Nothing in this collection yet.</h3><p>Add your first piece below and give it a photo.</p></div>}
+            <div className="clothing-grid">
+              {filteredItems.map((item) => (
+                <article className="clothing-item" key={item._id}>
+                  {editingId === item._id ? (
+                    <form className="auth-form item-edit-form" onSubmit={handleUpdateClothing}>
+                      <h3>Edit {item.name}</h3>
+                      <ClothingFields form={editForm} onChange={changeEditForm} categories={CATEGORIES} />
+                      <button type="submit" disabled={saving}>{saving ? "Saving…" : "Save changes"}</button>
+                      <button type="button" className="button-outline" onClick={cancelEditing} disabled={saving}>Cancel</button>
+                    </form>
+                  ) : (
+                    <>
+                      <ClothingPhoto item={item} token={token} />
+                      <div className="clothing-item__info">
+                        <h3>{item.name}</h3>
+                        <p>{[item.color, item.material,item.brand].filter(Boolean).join(" · ") || item.category}</p>{item.favorite&&<span className="eyebrow">♡ Favorite</span>}{item.sourceUrl&&<p><a href={item.sourceUrl} target="_blank" rel="noopener noreferrer">Product source ↗</a></p>}
+                        {(item.style || item.occasion || item.season) && <p className="clothing-item__meta">{[item.style,item.occasion,item.season].filter(Boolean).join(" · ")}</p>}
+                        <div className="clothing-item__actions">
+                          <button type="button" className="button-outline" onClick={() => startEditing(item)}>Edit</button>
+                          <button type="button" className="button-outline" disabled={deletingId === item._id} onClick={() => handleDeleteClothing(item._id)}>{deletingId === item._id ? "Deleting…" : "Delete"}</button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </article>
+              ))}
+            </div>
+          </section>
+        </>
+      )}
+      <details ref={addPanelRef} open={addPanelOpen} onToggle={e=>setAddPanelOpen(e.currentTarget.open)} className="wardrobe-add-panel" id="add-clothing">
+        <summary><span>+ Add a clothing item</span><span className="wardrobe-add-panel__hint">Grow your collection →</span></summary>
+        <form className="auth-form wardrobe-add-form" onSubmit={handleAddClothing}>
+          <p>Camera roll, phone camera or product image URL: start by adding the item, then upload a photo inside its category. Website images can be linked directly in the form below.</p>
+          <ClothingFields form={addForm} onChange={changeAddForm} categories={CATEGORIES} />
+          <button type="submit" disabled={adding}>{adding ? "Adding…" : "+ Add clothing"}</button>
+        </form>
+      </details>
     </main>
   );
 }

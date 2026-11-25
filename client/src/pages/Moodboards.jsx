@@ -1,0 +1,13 @@
+import {useState} from 'react';
+import useStyleEntries from '../hooks/useStyleEntries.js';
+import '../styles/collections.css';
+const isSecure=s=>!s||s.startsWith('https://');
+export default function Moodboards({token}){
+  const store=useStyleEntries('moodboard',token);
+  const [form,setForm]=useState({title:'',imageUrl:'',url:'',notes:''}),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+  const change=e=>setForm(s=>({...s,[e.target.name]:e.target.value}));
+  async function add(e){e.preventDefault();if(!isSecure(form.url)||!isSecure(form.imageUrl)){setError('Only HTTPS URLs are supported');return;}setBusy(true);setError('');try{await store.create(form);setForm({title:'',imageUrl:'',url:'',notes:''})}catch(e){setError(e.message)}finally{setBusy(false)}}
+  return <main className="editorial-page collection-page"><section className="page-heading"><div><p className="eyebrow">STYLE INSPIRATION</p><h1>Moodboards</h1><p>Gather fashion inspiration, looks, color stories, and links that reflect your personal style.</p></div></section>
+    <section className="collection-card"><h2>Add inspiration</h2><form onSubmit={add} className="collection-form"><div className="collection-form-row"><label>Title<input required maxLength={120} name="title" value={form.title} onChange={change} placeholder="Autumn neutrals"/></label><label>Inspiration image URL (HTTPS)<input name="imageUrl" value={form.imageUrl} onChange={change} type="url" placeholder="https://...image.jpg"/></label></div><label>Source link (optional)<input name="url" type="url" value={form.url} onChange={change} placeholder="https://..."/></label><label>Notes<textarea name="notes" value={form.notes} onChange={change} maxLength={600} rows={2} placeholder="How would you style this?"/></label><button className="button-primary" disabled={busy}>Save inspiration</button></form><p className="collection-help">Images appear through direct HTTPS URLs. Some websites prevent external image display; copy the image URL rather than the webpage URL.</p></section>
+    <section className="collection-feed"><h2>Your inspiration wall</h2>{!store.entries.length&&<p>Your moodboard is ready for its first inspiration.</p>}<div className="mood-grid">{store.entries.map(e=><article className="collection-card mood-card" key={e._id}>{e.imageUrl?<img src={e.imageUrl} alt={e.title} loading="lazy" referrerPolicy="no-referrer"/>:<div className="collection-placeholder">✦</div>}<h3>{e.title}</h3><p>{e.notes}</p><div className="entry-actions">{e.url&&<a href={e.url} rel="noopener noreferrer" target="_blank">Source ↗</a>}<button onClick={()=>store.remove(e._id)}>Remove</button></div></article>)}</div></section>{(error||store.error)&&<p className="error" role="alert">{error||store.error}</p>}</main>
+}

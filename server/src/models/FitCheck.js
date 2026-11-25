@@ -1,17 +1,31 @@
-
 import mongoose from "mongoose";
 
 const clothingPreviewSchema = new mongoose.Schema(
   {
     name: {
       type: String,
-      required: true
+      required: true,
+      trim: true
     },
+
     category: {
       type: String,
-      required: true
+      required: true,
+      trim: true
     },
+
     color: {
+      type: String,
+      default: "",
+      trim: true
+    },
+
+    imagePublicId: {
+      type: String,
+      default: ""
+    },
+
+    imageUrl: {
       type: String,
       default: ""
     }
@@ -29,7 +43,8 @@ const lookSchema = new mongoose.Schema(
 
     name: {
       type: String,
-      required: true
+      required: true,
+      trim: true
     },
 
     pieces: {
@@ -72,14 +87,18 @@ const fitCheckSchema = new mongoose.Schema(
       type: String,
       enum: ["open", "closed"],
       default: "open"
+    },
+
+    photosShared: {
+      type: Boolean,
+      default: false
     }
   },
-  { timestamps: true }
+  {
+    timestamps: true
+  }
 );
 
 fitCheckSchema.index({ createdAt: -1 });
 
-export default mongoose.model(
-  "FitCheck",
-  fitCheckSchema
-);
+export default mongoose.model("FitCheck", fitCheckSchema);

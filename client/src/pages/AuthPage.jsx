@@ -42,7 +42,7 @@ export default function AuthPage({ mode, onLogin }) {
           token: data.token
         });
 
-        navigate("/wardrobe");
+        navigate("/home");
       } else if (isSignup) {
         navigate("/login");
       } else {
@@ -58,7 +58,7 @@ export default function AuthPage({ mode, onLogin }) {
   }
 
   return (
-    <main className="shell">
+    <main className="shell auth-shell">
       <div className="eyebrow">
         YOUR SOCIAL FASHION CLOSET
       </div>

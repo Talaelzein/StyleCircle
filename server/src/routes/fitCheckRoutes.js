@@ -6,28 +6,20 @@ import { z } from "zod";
 import FitCheck from "../models/FitCheck.js";
 import FitCheckVote from "../models/FitCheckVote.js";
 import Outfit from "../models/Outfit.js";
-
 import { requireAuth } from "../middleware/requireAuth.js";
 import { validateBody } from "../middleware/validate.js";
 
 const router = Router();
 router.use(requireAuth);
 
-const objectIdSchema = z
-  .string()
-  .regex(/^[a-f0-9]{24}$/i, "Invalid outfit ID");
+const objectId = z.string().regex(/^[a-f\d]{24}$/i, "Invalid outfit ID");
 
 const createSchema = z.object({
   question: z.string().trim().min(5).max(160),
-
-  outfitIds: z
-    .array(objectIdSchema)
-    .length(2, "Select exactly two outfits")
-    .refine(
-      (ids) =>
-        ids[0].toLowerCase() !== ids[1].toLowerCase(),
-      "Choose two different outfits"
-    )
+  outfitIds: z.array(objectId).length(2).refine(
+    ([a, b]) => a.toLowerCase() !== b.toLowerCase(),
+    "Choose two different outfits"
+  )
 }).strict();
 
 const voteSchema = z.object({
@@ -36,38 +28,52 @@ const voteSchema = z.object({
 
 function validId(req, res, next) {
   if (!mongoose.isValidObjectId(req.params.id)) {
-    return res.status(400).json({
-      error: "Invalid FitCheck ID"
-    });
+    return res.status(400).json({ error: "Invalid FitCheck ID" });
   }
-
   next();
 }
 
-// Return only information that can be shared publicly
-// with other logged-in StyleCircle users.
-function publicPoll(
-  poll,
-  userId,
-  votes = { A: 0, B: 0 },
-  myVote = null
-) {
+function snapshotPiece(piece) {
+  return {
+    name: piece.name,
+    category: piece.category,
+    color: piece.color || "",
+    imagePublicId: piece.imagePublicId || "",
+    imageUrl: piece.imageUrl?.startsWith("https://") ? piece.imageUrl : ""
+  };
+}
+
+function snapshotLook(outfit) {
+  return {
+    outfitId: outfit._id,
+    name: outfit.name,
+    pieces: outfit.clothingItemIds.filter(Boolean).map(snapshotPiece)
+  };
+}
+
+function publicPoll(poll, userId, votes = { A: 0, B: 0 }, myVote = null) {
+  const shared = Boolean(poll.photosShared);
+
   return {
     _id: poll._id,
     question: poll.question,
     status: poll.status,
     createdAt: poll.createdAt,
-
-    isOwner:
-      String(poll.ownerId) === String(userId),
+    photosShared: shared,
+    isOwner: String(poll.ownerId) === String(userId),
 
     looks: poll.looks.map((look, index) => ({
       label: index === 0 ? "A" : "B",
       name: look.name,
+
       pieces: look.pieces.map((piece) => ({
         name: piece.name,
         category: piece.category,
-        color: piece.color || ""
+        color: piece.color || "",
+        hasPhoto: shared && Boolean(piece.imagePublicId),
+        imageUrl: shared && piece.imageUrl?.startsWith("https://")
+          ? piece.imageUrl
+          : ""
       }))
     })),
 
@@ -76,8 +82,15 @@ function publicPoll(
   };
 }
 
-// GET /api/fitchecks
-// View the latest polls from StyleCircle users.
+async function ownerOutfits(ids, ownerId) {
+  return Outfit.find({ _id: { $in: ids }, ownerId }).populate({
+    path: "clothingItemIds",
+    match: { ownerId },
+    select: "name category color imagePublicId imageUrl"
+  });
+}
+
+// GET: Community FitChecks
 router.get("/", async (req, res) => {
   const polls = await FitCheck.find()
     .sort({ createdAt: -1 })
@@ -86,13 +99,9 @@ router.get("/", async (req, res) => {
 
   const ids = polls.map((poll) => poll._id);
 
-  const [totals, myVotes] = await Promise.all([
+  const [totals, mine] = await Promise.all([
     FitCheckVote.aggregate([
-      {
-        $match: {
-          fitCheckId: { $in: ids }
-        }
-      },
+      { $match: { fitCheckId: { $in: ids } } },
       {
         $group: {
           _id: {
@@ -112,20 +121,18 @@ router.get("/", async (req, res) => {
 
   const counts = new Map();
 
-  for (const row of totals) {
-    const id = String(row._id.fitCheckId);
+  for (const { _id, count } of totals) {
+    const id = String(_id.fitCheckId);
 
     if (!counts.has(id)) {
       counts.set(id, { A: 0, B: 0 });
     }
 
-    const result = counts.get(id);
-
-    result[row._id.choice] = row.count;
+    counts.get(id)[_id.choice] = count;
   }
 
-  const userChoices = new Map(
-    myVotes.map((vote) => [
+  const choices = new Map(
+    mine.map((vote) => [
       String(vote.fitCheckId),
       vote.choice
     ])
@@ -138,75 +145,99 @@ router.get("/", async (req, res) => {
       return publicPoll(
         poll,
         req.userId,
-        counts.get(id) || { A: 0, B: 0 },
-        userChoices.get(id) || null
+        counts.get(id),
+        choices.get(id) || null
       );
     })
   });
 });
 
-// POST /api/fitchecks
-// Share two saved outfits in a new poll.
-router.post(
-  "/",
-  validateBody(createSchema),
-  async (req, res) => {
-    const { question, outfitIds } = req.validatedBody;
+// POST: Create FitCheck with outfit photos
+router.post("/", validateBody(createSchema), async (req, res) => {
+  const { question, outfitIds } = req.validatedBody;
+  const outfits = await ownerOutfits(outfitIds, req.userId);
 
-    // Both outfits must belong to the current user.
-    const outfits = await Outfit.find({
-      _id: { $in: outfitIds },
-      ownerId: req.userId
-    }).populate({
-      path: "clothingItemIds",
-      match: { ownerId: req.userId },
-      select: "name category color"
+  if (outfits.length !== 2) {
+    return res.status(400).json({
+      error: "Choose two outfits from your account"
     });
+  }
 
-    if (outfits.length !== 2) {
-      return res.status(400).json({
-        error:
-          "Select two saved outfits belonging to your account"
+  const lookup = new Map(
+    outfits.map((outfit) => [String(outfit._id), outfit])
+  );
+
+  const looks = outfitIds.map((id) =>
+    snapshotLook(lookup.get(id.toLowerCase()))
+  );
+
+  const poll = await FitCheck.create({
+    ownerId: req.userId,
+    question,
+    looks,
+    status: "open",
+    photosShared: true
+  });
+
+  res.status(201).json({
+    poll: publicPoll(poll, req.userId),
+    message: "FitCheck posted successfully!"
+  });
+});
+
+// PATCH: Share photos in an older FitCheck
+router.patch("/:id/share-photos", validId, async (req, res) => {
+  const poll = await FitCheck.findOne({
+    _id: req.params.id,
+    ownerId: req.userId
+  });
+
+  if (!poll) {
+    return res.status(404).json({
+      error: "FitCheck not found"
+    });
+  }
+
+  const outfits = await ownerOutfits(
+    poll.looks.map((look) => look.outfitId),
+    req.userId
+  );
+
+  if (outfits.length !== 2) {
+    return res.status(409).json({
+      error: "Saved outfits are missing. Create a new FitCheck."
+    });
+  }
+
+  const lookup = new Map(
+    outfits.map((outfit) => [String(outfit._id), outfit])
+  );
+
+  for (const look of poll.looks) {
+    const outfit = lookup.get(String(look.outfitId));
+
+    if (!outfit) {
+      return res.status(409).json({
+        error: "One saved outfit is missing"
       });
     }
 
-    // Preserve the A/B order chosen by the user.
-    const looks = outfitIds.map((id) => {
-      const outfit = outfits.find(
-        (item) =>
-          String(item._id) === id.toLowerCase()
-      );
-
-      return {
-        outfitId: outfit._id,
-        name: outfit.name,
-
-        pieces: outfit.clothingItemIds
-          .filter(Boolean)
-          .map((piece) => ({
-            name: piece.name,
-            category: piece.category,
-            color: piece.color || ""
-          }))
-      };
-    });
-
-    const poll = await FitCheck.create({
-      ownerId: req.userId,
-      question,
-      looks,
-      status: "open"
-    });
-
-    res.status(201).json({
-      poll: publicPoll(poll, req.userId),
-      message: "FitCheck posted successfully!"
-    });
+    look.pieces = snapshotLook(outfit).pieces;
   }
-);
 
-// PUT /api/fitchecks/:id/vote
-// Vote A or B, or change an existing vote.
+  poll.photosShared = true;
+  poll.markModified("looks");
+  await poll.save();
+
+  const visible = publicPoll(poll, req.userId);
+
+  res.json({
+    looks: visible.looks,
+    photosShared: visible.photosShared
+  });
+});
+
+// PUT: Vote or change an existing vote
 router.put(
   "/:id/vote",
   validId,
@@ -226,9 +257,7 @@ router.put(
       });
     }
 
-    if (
-      String(poll.ownerId) === String(req.userId)
-    ) {
+    if (String(poll.ownerId) === String(req.userId)) {
       return res.status(403).json({
         error: "You cannot vote on your own FitCheck"
       });
@@ -240,20 +269,13 @@ router.put(
       voterId: req.userId
     };
 
-    // Upsert creates a vote or updates the existing one.
     try {
       await FitCheckVote.findOneAndUpdate(
         filter,
         { $set: { choice } },
-        {
-          upsert: true,
-          new: true,
-          runValidators: true
-        }
+        { upsert: true, new: true, runValidators: true }
       );
     } catch (error) {
-      // If two simultaneous first votes collide,
-      // the unique index prevents duplicate votes.
       if (error.code !== 11000) throw error;
 
       await FitCheckVote.updateOne(
@@ -262,17 +284,14 @@ router.put(
       );
     }
 
-    const [A, B] = await Promise.all([
-      FitCheckVote.countDocuments({
-        fitCheckId: poll._id,
-        choice: "A"
-      }),
-
-      FitCheckVote.countDocuments({
-        fitCheckId: poll._id,
-        choice: "B"
-      })
-    ]);
+    const [A, B] = await Promise.all(
+      ["A", "B"].map((c) =>
+        FitCheckVote.countDocuments({
+          fitCheckId: poll._id,
+          choice: c
+        })
+      )
+    );
 
     res.json({
       message: "Vote saved successfully!",
@@ -282,62 +301,44 @@ router.put(
   }
 );
 
-// PATCH /api/fitchecks/:id/close
-// Only the owner can close the poll.
-router.patch(
-  "/:id/close",
-  validId,
-  async (req, res) => {
-    const poll = await FitCheck.findOneAndUpdate(
-      {
-        _id: req.params.id,
-        ownerId: req.userId
-      },
-      {
-        $set: { status: "closed" }
-      },
-      {
-        new: true
-      }
-    );
+// PATCH: Close voting
+router.patch("/:id/close", validId, async (req, res) => {
+  const poll = await FitCheck.findOneAndUpdate(
+    { _id: req.params.id, ownerId: req.userId },
+    { $set: { status: "closed" } },
+    { new: true }
+  );
 
-    if (!poll) {
-      return res.status(404).json({
-        error: "FitCheck not found"
-      });
-    }
-
-    res.json({
-      message: "Voting closed",
-      status: poll.status
+  if (!poll) {
+    return res.status(404).json({
+      error: "FitCheck not found"
     });
   }
-);
 
-// DELETE /api/fitchecks/:id
-// Only the owner can delete the poll.
-router.delete(
-  "/:id",
-  validId,
-  async (req, res) => {
-    const poll = await FitCheck.findOneAndDelete({
-      _id: req.params.id,
-      ownerId: req.userId
+  res.json({
+    status: poll.status,
+    message: "Voting closed"
+  });
+});
+
+// DELETE: Remove FitCheck and its votes
+router.delete("/:id", validId, async (req, res) => {
+  const poll = await FitCheck.findOneAndDelete({
+    _id: req.params.id,
+    ownerId: req.userId
+  });
+
+  if (!poll) {
+    return res.status(404).json({
+      error: "FitCheck not found"
     });
-
-    if (!poll) {
-      return res.status(404).json({
-        error: "FitCheck not found"
-      });
-    }
-
-    // Remove votes attached to the deleted poll.
-    await FitCheckVote.deleteMany({
-      fitCheckId: poll._id
-    });
-
-    res.status(204).end();
   }
-);
+
+  await FitCheckVote.deleteMany({
+    fitCheckId: poll._id
+  });
+
+  res.status(204).end();
+});
 
 export default router;

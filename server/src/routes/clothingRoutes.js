@@ -25,13 +25,18 @@ const createSchema = z.object({
   occasion: z.string().trim().max(50).optional(),
   season: z.string().trim().max(50).optional(),
 
-  // Temporary image URL support until photo uploads are added.
-  imageUrl: z.url()
-    .max(500)
+  brand: z.string().trim().max(80).optional(),
+  size: z.string().trim().max(40).optional(),
+  price: z.number().min(0).max(100000000).optional(),
+  purchaseDate: z.union([z.literal(""), z.string().regex(/^\d{4}-\d{2}-\d{2}$/)]).optional(),
+  favorite: z.boolean().optional(),
+  sourceUrl: z.union([z.literal(""), z.string().url().max(1200).refine(v=>v.startsWith("https://"))]).optional(),
+  // Direct HTTPS image URL support for product photos.
+  imageUrl: z.union([z.literal(""), z.url().max(1200)
     .refine(
       (url) => url.startsWith("https://"),
       "Use an HTTPS image URL"
-    )
+    )])
     .optional()
 }).strict();
 
