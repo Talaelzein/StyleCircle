@@ -36,7 +36,11 @@ app.use(express.json({ limit: "100kb" }));
 app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000,
-    limit: process.env.NODE_ENV === "production" ? 100 : 1000,
+    limit: process.env.NODE_ENV === "production" ? 500 : 1000,
+    skip: (req) =>
+      req.method === "GET" &&
+      (req.path.startsWith("/api/images/clothing/") ||
+       req.path.startsWith("/api/images/fitcheck/")),
     standardHeaders: "draft-8",
     legacyHeaders: false
   })
