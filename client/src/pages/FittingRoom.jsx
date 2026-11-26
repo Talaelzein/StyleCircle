@@ -1,5 +1,4 @@
-
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import ClothingPreview from "../components/ClothingPreview.jsx";
 import { API_URL, getResponseData } from "../services/api.js";
@@ -8,6 +7,13 @@ import "../styles/fitting-room.css";
 
 const MAX_PHOTO = 15 * 1024 * 1024;
 const TYPES = ["image/jpeg", "image/png", "image/webp"];
+const SUPPORTED_CATEGORIES = new Set([
+  "top",
+  "outerwear",
+  "bottom",
+  "dress"
+]);
+
 function accountId(token) {
   try {
     const payload = JSON.parse(
@@ -54,9 +60,11 @@ async function storage(action, key, blob) {
       const store = transaction.objectStore("photos");
 
       const request =
-        action === "put" ? store.put(blob, key) :
-        action === "delete" ? store.delete(key) :
-        store.get(key);
+        action === "put"
+          ? store.put(blob, key)
+          : action === "delete"
+            ? store.delete(key)
+            : store.get(key);
 
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
@@ -67,13 +75,74 @@ async function storage(action, key, blob) {
   }
 }
 
-function initialSelection(key) {
+function initialSelectionList(key) {
   try {
     const data = JSON.parse(localStorage.getItem(key) || "{}");
-    return Array.isArray(data.picked) ? data.picked[0] || "" : "";
+    return Array.isArray(data.picked)
+      ? data.picked.map(String)
+      : [];
   } catch {
-    return "";
+    return [];
   }
+}
+
+function selectionSignature(ids) {
+  return ids
+    .map(String)
+    .slice()
+    .sort()
+    .join("|");
+}
+
+function normalizeCategory(category) {
+  return String(category || "").toLowerCase();
+}
+
+function buildDescription(item) {
+  return [
+    item.color,
+    item.name,
+    item.category
+  ].filter(Boolean).join(" ");
+}
+
+function applySelectionRules(currentIds, clickedItem, clothes) {
+  const id = String(clickedItem._id);
+  const category = normalizeCategory(clickedItem.category);
+
+  if (!SUPPORTED_CATEGORIES.has(category)) {
+    return currentIds;
+  }
+
+  if (currentIds.includes(id)) {
+    return currentIds.filter(existingId => existingId !== id);
+  }
+
+  const currentItems = currentIds
+    .map(existingId =>
+      clothes.find(piece => String(piece._id) === String(existingId))
+    )
+    .filter(Boolean);
+
+  const kept = currentItems.filter(piece => {
+    const pieceCategory = normalizeCategory(piece.category);
+
+    if (pieceCategory === category) {
+      return false;
+    }
+
+    if (category === "dress" && (pieceCategory === "top" || pieceCategory === "bottom")) {
+      return false;
+    }
+
+    if ((category === "top" || category === "bottom") && pieceCategory === "dress") {
+      return false;
+    }
+
+    return true;
+  });
+
+  return [...kept.map(piece => String(piece._id)), id];
 }
 
 export default function FittingRoom({ token }) {
@@ -85,8 +154,8 @@ export default function FittingRoom({ token }) {
   const [photo, setPhoto] = useState(null);
   const [result, setResult] = useState(null);
   const [clothes, setClothes] = useState([]);
-  const [selectedId, setSelectedId] = useState(() =>
-    initialSelection(selectionKey)
+  const [selectedIds, setSelectedIds] = useState(() =>
+    initialSelectionList(selectionKey)
   );
 
   const [loading, setLoading] = useState(true);
@@ -105,6 +174,16 @@ export default function FittingRoom({ token }) {
     return url;
   }
 
+  const selectedItems = useMemo(
+    () =>
+      selectedIds
+        .map(id => clothes.find(item => String(item._id) === String(id)))
+        .filter(Boolean),
+    [selectedIds, clothes]
+  );
+
+  const selectedSignature = selectionSignature(selectedIds);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -118,35 +197,40 @@ export default function FittingRoom({ token }) {
         if (cancelled) return;
 
         if (savedPhoto instanceof Blob) {
-          const restored = {
+          const restoredPhoto = {
             blob: savedPhoto,
             url: makeURL(savedPhoto)
           };
 
-          photoRef.current = restored;
-          setPhoto(restored);
+          photoRef.current = restoredPhoto;
+          setPhoto(restoredPhoto);
         }
 
-        const resultItem = localStorage.getItem(resultMetaKey);
+        const savedMeta = localStorage.getItem(resultMetaKey);
+        const initialSignature = selectionSignature(
+          initialSelectionList(selectionKey)
+        );
 
         if (
           savedResult instanceof Blob &&
-          resultItem === initialSelection(selectionKey)
+          savedMeta === initialSignature
         ) {
-          const restored = {
+          const restoredResult = {
             blob: savedResult,
             url: makeURL(savedResult)
           };
 
-          resultRef.current = restored;
-          setResult(restored);
+          resultRef.current = restoredResult;
+          setResult(restoredResult);
         }
       } catch {
         if (!cancelled) {
           setError("Could not restore photos from browser storage.");
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
@@ -185,6 +269,7 @@ export default function FittingRoom({ token }) {
     }
 
     loadClothes();
+
     return () => controller.abort();
   }, [token]);
 
@@ -193,25 +278,19 @@ export default function FittingRoom({ token }) {
       localStorage.setItem(
         selectionKey,
         JSON.stringify({
-          picked: selectedId ? [selectedId] : []
+          picked: selectedIds
         })
       );
     } catch {
       // Selection still works without browser storage.
     }
-  }, [selectedId, selectionKey]);
+  }, [selectedIds, selectionKey]);
 
   useEffect(() => {
     return () => {
       urlsRef.current.forEach(url => URL.revokeObjectURL(url));
     };
   }, []);
-
-  const availableClothes = clothes;
-
-  const selectedItem = availableClothes.find(
-    item => String(item._id) === String(selectedId)
-  );
 
   async function clearResult() {
     resultRef.current = null;
@@ -239,13 +318,13 @@ export default function FittingRoom({ token }) {
     setError("");
     setMessage("");
 
-    const next = {
+    const nextPhoto = {
       blob: file,
       url: makeURL(file)
     };
 
-    photoRef.current = next;
-    setPhoto(next);
+    photoRef.current = nextPhoto;
+    setPhoto(nextPhoto);
     await clearResult();
 
     try {
@@ -256,21 +335,52 @@ export default function FittingRoom({ token }) {
     }
   }
 
-  async function chooseItem(item) {
+  async function toggleItem(item) {
     if (generating) return;
 
-    const id = String(item._id);
+    const nextIds = applySelectionRules(selectedIds, item, clothes);
 
-    if (selectedId === id) return;
-
-    setSelectedId(id);
+    setSelectedIds(nextIds);
     setError("");
     setMessage("");
     await clearResult();
   }
 
+  async function loadGarmentBlob(item) {
+    if (item.imagePublicId) {
+      const response = await fetch(
+        `${API_URL}/api/images/clothing/${item._id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Could not load the image for ${item.name}.`);
+      }
+
+      return response.blob();
+    }
+
+    if (item.imageUrl?.startsWith("https://")) {
+      const response = await fetch(item.imageUrl);
+
+      if (!response.ok) {
+        throw new Error(`Could not load the image for ${item.name}.`);
+      }
+
+      return response.blob();
+    }
+
+    throw new Error(
+      `Upload a clothing photo in My Wardrobe for ${item.name}.`
+    );
+  }
+
   async function generate() {
-    if (!photo?.blob || !selectedItem || generating) return;
+    if (!photo?.blob || !selectedItems.length || generating) return;
 
     if (!consent) {
       setError(
@@ -284,49 +394,39 @@ export default function FittingRoom({ token }) {
     setMessage("Generating your realistic AI try-on...");
 
     try {
-      let garment;
+      const garments = [];
 
-      if (selectedItem.imagePublicId) {
-        const response = await fetch(
-          `${API_URL}/api/images/clothing/${selectedItem._id}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`
-            }
-          }
-        );
+      for (const item of selectedItems) {
+        const category = normalizeCategory(item.category);
 
-        if (!response.ok) {
-          throw new Error("Could not load the clothing image.");
+        if (!SUPPORTED_CATEGORIES.has(category)) {
+          continue;
         }
 
-        garment = await response.blob();
-      } else if (selectedItem.imageUrl?.startsWith("https://")) {
-        const response = await fetch(selectedItem.imageUrl);
+        const garmentImage = await loadGarmentBlob(item);
 
-        if (!response.ok) {
-          throw new Error("Could not load the clothing image.");
-        }
+        garments.push({
+          garmentImage,
+          category,
+          description: buildDescription(item)
+        });
+      }
 
-        garment = await response.blob();
-      } else {
+      if (!garments.length) {
         throw new Error(
-          "Upload a clothing photo in My Wardrobe first."
+          "Select at least one supported garment: top, outerwear, bottom, or dress."
         );
       }
 
       const imageUrl = await generateTryOn({
         personImage: photo.blob,
-        garmentImage: garment,
-        category: selectedItem.category,
-        description: [
-          selectedItem.color,
-          selectedItem.name,
-          selectedItem.category
-        ].filter(Boolean).join(" ")
+        garments
       });
 
-      let generated = { url: imageUrl, blob: null };
+      let generated = {
+        url: imageUrl,
+        blob: null
+      };
 
       try {
         const response = await fetch(imageUrl);
@@ -341,10 +441,7 @@ export default function FittingRoom({ token }) {
             };
 
             await storage("put", resultKey, blob);
-            localStorage.setItem(
-              resultMetaKey,
-              String(selectedItem._id)
-            );
+            localStorage.setItem(resultMetaKey, selectedSignature);
           }
         }
       } catch {
@@ -355,15 +452,11 @@ export default function FittingRoom({ token }) {
       setResult(generated);
       setMessage("Your AI try-on is ready!");
     } catch (err) {
-      const details = String(err?.message || "");
-      const unavailable =
-        /quota|zerogpu|busy|429|limit exceeded/i.test(details);
+      console.error("AI TRY-ON ERROR:", err);
 
-      setError(
-        unavailable
-          ? "The free AI service is temporarily unavailable. You can still import a previously generated try-on result."
-          : details || "AI try-on failed. Please try again."
-      );
+      const details = String(err?.message || "");
+
+      setError(details || "AI try-on failed. Please try again.");
       setMessage("");
     } finally {
       setGenerating(false);
@@ -392,14 +485,14 @@ export default function FittingRoom({ token }) {
 
     try {
       await storage("put", resultKey, file);
-      localStorage.setItem(resultMetaKey, selectedId);
+      localStorage.setItem(resultMetaKey, selectedSignature);
       setMessage("Your AI result has been saved locally.");
     } catch {
       setMessage("AI result loaded, but local saving is unavailable.");
     }
   }
 
-  async function downloadResult() {
+  function downloadResult() {
     if (!result) return;
 
     if (!result.blob) {
@@ -415,6 +508,10 @@ export default function FittingRoom({ token }) {
     link.remove();
   }
 
+  const supportedClothes = clothes.filter(item =>
+    SUPPORTED_CATEGORIES.has(normalizeCategory(item.category))
+  );
+
   return (
     <main className="auto-studio">
       <header className="auto-studio-heading">
@@ -423,7 +520,8 @@ export default function FittingRoom({ token }) {
           <h1>AI Style Studio</h1>
           <p>
             Try on your own wardrobe with realistic AI-generated
-            photographs. No dragging, resizing or manual fitting.
+            photographs. You can now combine multiple pieces in
+            one preview.
           </p>
         </div>
 
@@ -451,7 +549,10 @@ export default function FittingRoom({ token }) {
               />
 
               {photo ? (
-                <img src={photo.url} alt="Your front-view photo" />
+                <img
+                  src={photo.url}
+                  alt="Your front-view photo"
+                />
               ) : (
                 <span className="auto-studio-add">+</span>
               )}
@@ -466,23 +567,28 @@ export default function FittingRoom({ token }) {
             Your original photo is stored in this browser.
           </p>
 
-          <h2 style={{ marginTop: 25 }}>2. Select a garment</h2>
+          <h2 style={{ marginTop: 25 }}>2. Select garments</h2>
 
           <p className="auto-studio-hint">
-            Choose any item from your wardrobe. Tops, bottoms and dresses use category-specific AI models.
+            You can combine:
+            <br />
+            • top + bottom
+            <br />
+            • top + bottom + outerwear
+            <br />
+            • dress + outerwear
           </p>
 
           <div
             className="auto-studio-clothes"
             style={{
-              gridTemplateColumns:
-                "repeat(auto-fill, minmax(110px, 1fr))",
+              gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))",
               maxHeight: 350,
               overflowY: "auto"
             }}
           >
-            {availableClothes.map(item => {
-              const active = selectedId === String(item._id);
+            {supportedClothes.map(item => {
+              const active = selectedIds.includes(String(item._id));
 
               return (
                 <button
@@ -491,7 +597,7 @@ export default function FittingRoom({ token }) {
                   disabled={generating}
                   className={active ? "active" : ""}
                   aria-pressed={active}
-                  onClick={() => chooseItem(item)}
+                  onClick={() => toggleItem(item)}
                 >
                   <ClothingPreview
                     item={item}
@@ -510,11 +616,19 @@ export default function FittingRoom({ token }) {
             })}
           </div>
 
-          {!availableClothes.length && (
+          {!supportedClothes.length && (
             <p className="auto-studio-hint">
-              Add clothing to your wardrobe to begin.
+              Add tops, bottoms, dresses, or outerwear to your wardrobe to begin.
             </p>
           )}
+
+          <p className="auto-studio-hint" style={{ marginTop: 12 }}>
+            Selected:
+            {" "}
+            {selectedItems.length
+              ? selectedItems.map(item => item.name).join(", ")
+              : "None"}
+          </p>
 
           <h2 style={{ marginTop: 25 }}>3. Generate</h2>
 
@@ -542,7 +656,7 @@ export default function FittingRoom({ token }) {
             onClick={generate}
             disabled={
               !photo ||
-              !selectedItem ||
+              !selectedItems.length ||
               !consent ||
               generating ||
               loading
@@ -561,10 +675,8 @@ export default function FittingRoom({ token }) {
           </button>
 
           <p className="auto-studio-hint">
-            AI try-on uses external research models. Free GPU availability may vary.
-            Tops, outerwear, bottoms and dresses are the currently configured
-            categories; shoes and accessories remain visible but need a
-            different AI model.
+            AI try-on uses external research models. Multiple-piece outfits
+            are generated sequentially, so results may vary slightly.
           </p>
         </aside>
 
@@ -574,8 +686,7 @@ export default function FittingRoom({ token }) {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns:
-                "repeat(auto-fit, minmax(220px, 1fr))",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
               gap: 16
             }}
           >
@@ -625,7 +736,7 @@ export default function FittingRoom({ token }) {
                     <p>
                       {generating
                         ? "Generating with the selected AI model..."
-                        : "Choose a garment and generate a preview."}
+                        : "Choose one or more garments and generate a preview."}
                     </p>
                   </div>
                 )}
@@ -640,7 +751,7 @@ export default function FittingRoom({ token }) {
               disabled={!result}
               onClick={downloadResult}
             >
-              Download result
+              Download Result
             </button>
 
             <label
@@ -651,7 +762,7 @@ export default function FittingRoom({ token }) {
               <input
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
-                disabled={!photo || !selectedItem || generating}
+                disabled={!photo || !selectedItems.length || generating}
                 onChange={importResult}
                 style={{ display: "none" }}
               />
@@ -661,8 +772,7 @@ export default function FittingRoom({ token }) {
           <p className="auto-studio-disclaimer">
             AI-generated visualization, not an exact prediction
             of garment fit or size. External research models are
-            used; results and availability
-            may vary.
+            used; results and availability may vary.
           </p>
         </section>
       </div>
