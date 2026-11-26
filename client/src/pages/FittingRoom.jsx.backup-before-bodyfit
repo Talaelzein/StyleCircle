@@ -1,0 +1,569 @@
+import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import { API_URL, getResponseData } from "../services/api";
+import ClothingPreview from "../components/ClothingPreview.jsx";
+import { analyzeBodyPhotos } from "../utils/analyzeBodyPhotos.js";
+import "../styles/photo-guided-avatar.css";
+import useDraftState from "../hooks/useDraftState.js";
+import "../styles/fitting-room.css";
+import "../styles/premium-studio.css";
+
+const MAX_BYTES = 15 * 1024 * 1024;
+const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
+const CATEGORIES = ["all", "top", "bottom", "dress", "outerwear", "shoes", "bag", "accessory"];
+const LABELS = { all: "All", top: "Tops", bottom: "Bottoms", dress: "Dresses", outerwear: "Jackets", shoes: "Shoes", bag: "Bags", accessory: "Accessories" };
+const POSITIONS = {
+  top: { x: 28, y: 24, width: 44 }, bottom: { x: 29, y: 47, width: 42 },
+  dress: { x: 22, y: 25, width: 55 }, outerwear: { x: 22, y: 23, width: 56 },
+  shoes: { x: 31, y: 80, width: 36 }, bag: { x: 65, y: 42, width: 25 },
+  accessory: { x: 42, y: 12, width: 22 }
+};
+const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+// Three landmarks measured on the *displayed* photo: left shoulder,
+// right shoulder, waist centre. This is guided placement, not body tracking.
+const POINT_NAMES = ["left shoulder", "right shoulder", "waist centre"];
+function alignedPosition(category, points) {
+  if (!Array.isArray(points) || points.length !== 3) return null;
+  if (["shoes", "bag", "accessory"].includes(category)) return null;
+  const [left, right, waist] = points;
+  const shoulderWidth = Math.abs(right.x - left.x);
+  if (shoulderWidth < 5) return null;
+  const middleX = (left.x + right.x) / 2;
+  const middleY = (left.y + right.y) / 2;
+  const factors = { top: 1.25, outerwear: 1.42, dress: 1.45, bottom: 1.3 };
+  const width = Math.round(clamp(shoulderWidth * (factors[category] || 1.3), 16, 82));
+  const targetX = category === "bottom" ? waist.x : middleX;
+  const targetY = category === "bottom" ? waist.y - 2 : middleY - 4;
+  const rotation = clamp(Math.atan2(right.y - left.y, right.x - left.x) * 180 / Math.PI, -10, 10);
+  return {
+    x: clamp(targetX - width / 2, 0, 100 - width),
+    y: clamp(targetY, 0, 92),
+    width,
+    rotation: Math.round(rotation)
+  };
+}
+
+function loadImage(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Could not read an image."));
+    img.src = url;
+  });
+}
+
+function canvasBlob(canvas) {
+  return new Promise((resolve, reject) => canvas.toBlob(
+    (blob) => blob ? resolve(blob) : reject(new Error("Could not process the picture.")),
+    "image/png"
+  ));
+}
+
+// Browser-only cutout for flat/near-white product-photo backgrounds.
+// It is NOT person segmentation or generative AI and won't work on busy backgrounds.
+async function cutOutBackground(blob) {
+  const src = URL.createObjectURL(blob);
+  try {
+    const image = await loadImage(src);
+    const scale = Math.min(1, 640 / Math.max(image.naturalWidth, image.naturalHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const w = canvas.width, h = canvas.height;
+    const data = ctx.getImageData(0, 0, w, h);
+    const px = data.data;
+    const corners = [0, w - 1, (h - 1) * w, h * w - 1];
+    const avg = [0, 0, 0];
+    for (const p of corners) for (let k = 0; k < 3; k++) avg[k] += px[p * 4 + k] / corners.length;
+    const neutral = Math.max(...avg) - Math.min(...avg) < 45;
+    const light = (avg[0] + avg[1] + avg[2]) / 3 > 175;
+    if (!neutral || !light) return null; // Don't damage patterned/dark photos.
+
+    const visited = new Uint8Array(w * h);
+    const stack = [];
+    function nearBackground(index) {
+      const i = index * 4;
+      const d = Math.hypot(px[i] - avg[0], px[i + 1] - avg[1], px[i + 2] - avg[2]);
+      return d < 62;
+    }
+    function enqueue(index) {
+      if (!visited[index] && nearBackground(index)) {
+        visited[index] = 1;
+        stack.push(index);
+      }
+    }
+    for (let x = 0; x < w; x++) { enqueue(x); enqueue((h - 1) * w + x); }
+    for (let y = 0; y < h; y++) { enqueue(y * w); enqueue(y * w + w - 1); }
+    while (stack.length) {
+      const p = stack.pop();
+      const x = p % w, y = Math.floor(p / w);
+      if (x > 0) enqueue(p - 1);
+      if (x < w - 1) enqueue(p + 1);
+      if (y > 0) enqueue(p - w);
+      if (y < h - 1) enqueue(p + w);
+    }
+    for (let p = 0; p < w * h; p++) if (visited[p]) px[p * 4 + 3] = 0;
+    // Lightly feather the pixels directly bordering removed background.
+    for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+      const p = y * w + x;
+      if (visited[p]) continue;
+      if (visited[p - 1] || visited[p + 1] || visited[p - w] || visited[p + w]) {
+        px[p * 4 + 3] = Math.round(px[p * 4 + 3] * 0.65);
+      }
+    }
+    ctx.putImageData(data, 0, 0);
+
+    // Trim transparent margins around product photos. Without this,
+    // a garment can look tiny even if its overlay width is correct.
+    let minX = w, minY = h, maxX = -1, maxY = -1;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (px[(y * w + x) * 4 + 3] <= 30) continue;
+        minX = Math.min(minX, x); minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
+      }
+    }
+    if (maxX < 0 || maxY < 0) return null;
+    // Don't trim if background detection did not really remove anything.
+    if ((maxX - minX + 1) * (maxY - minY + 1) > w * h * 0.97) {
+      return URL.createObjectURL(await canvasBlob(canvas));
+    }
+    const padding = Math.ceil(Math.max(w, h) * 0.02);
+    const x0 = Math.max(0, minX - padding), y0 = Math.max(0, minY - padding);
+    const x1 = Math.min(w, maxX + padding + 1), y1 = Math.min(h, maxY + padding + 1);
+    const trimmed = document.createElement("canvas");
+    trimmed.width = x1 - x0; trimmed.height = y1 - y0;
+    trimmed.getContext("2d").drawImage(canvas, x0, y0, trimmed.width, trimmed.height, 0, 0, trimmed.width, trimmed.height);
+    return URL.createObjectURL(await canvasBlob(trimmed));
+  } finally { URL.revokeObjectURL(src); }
+}
+
+// Use the same center-crop that the preview uses (object-fit: cover).
+function drawCover(ctx, img, width, height) {
+  const iw = img.naturalWidth, ih = img.naturalHeight;
+  const scale = Math.max(width / iw, height / ih);
+  const sw = width / scale, sh = height / scale;
+  ctx.drawImage(img, (iw - sw) / 2, (ih - sh) / 2, sw, sh, 0, 0, width, height);
+}
+
+function PhotoStage({ view, photo, layers, assets, useCutout, selectedId, setSelectedId, onMove, previewMode, calibrationPoints, isCalibrating, onCalibrationPoint }) {
+  const start = useRef(null);
+  const calibrationClick = useRef(false);
+  const current = layers.filter((layer) => layer.view === view);
+
+  function pointerDown(event, layer) {
+    if (previewMode || (event.pointerType === "mouse" && event.button !== 0)) return;
+    event.preventDefault();
+    setSelectedId(layer.id);
+    event.currentTarget.setPointerCapture(event.pointerId);
+    start.current = { id: layer.id, x: layer.x, y: layer.y, clientX: event.clientX, clientY: event.clientY };
+  }
+  function pointerMove(event, layer) {
+    const origin = start.current;
+    if (previewMode || !origin || origin.id !== layer.id) return;
+    const rect = event.currentTarget.parentElement.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    onMove(layer.id,
+      clamp(origin.x + ((event.clientX - origin.clientX) / rect.width) * 100, 0, 100 - layer.width),
+      clamp(origin.y + ((event.clientY - origin.clientY) / rect.height) * 100, 0, 96)
+    );
+  }
+  return (
+    <div className="sc-photo-stage" aria-label={`${view} photo preview`}
+      style={isCalibrating ? { cursor: "crosshair", touchAction: "none" } : undefined}
+      onPointerDownCapture={(event) => {
+        if (!isCalibrating || !photo?.url || previewMode) return;
+        event.preventDefault(); event.stopPropagation();
+        calibrationClick.current = true;
+        const rect = event.currentTarget.getBoundingClientRect();
+        onCalibrationPoint(view, {
+          x: clamp(((event.clientX - rect.left) / rect.width) * 100, 0, 100),
+          y: clamp(((event.clientY - rect.top) / rect.height) * 100, 0, 100)
+        });
+      }}
+      onClick={(event) => {
+        if (calibrationClick.current) { calibrationClick.current = false; return; }
+        if (!previewMode && !isCalibrating && event.target === event.currentTarget) setSelectedId(null);
+      }}>
+      {photo?.url ? <img className="sc-photo-stage__body" src={photo.url} alt={`${view} body upload`} onClick={() => { if (!previewMode && !isCalibrating && !calibrationClick.current) setSelectedId(null); }} /> : (
+        <div className="sc-photo-stage__empty"><span>✧</span><strong>{view === "front" ? "Front" : "Back"} photo</strong><small>Add a photo to preview your look.</small></div>
+      )}
+      {photo?.url && !previewMode && calibrationPoints?.map((point, i) => (
+        <div key={`point-${i}`} aria-hidden="true" style={{
+          position: "absolute", left: `${point.x}%`, top: `${point.y}%`,
+          width: 17, height: 17, transform: "translate(-50%, -50%)",
+          borderRadius: "50%", border: "2px solid white", background: "#8d425b",
+          color: "white", fontSize: 9, fontWeight: 700,
+          display: "grid", placeItems: "center", zIndex: 7,
+          pointerEvents: "none", boxShadow: "0 1px 6px #301a2466"
+        }}>{i + 1}</div>
+      ))}
+      {photo?.url && current.map((layer) => {
+        const asset = assets[layer.itemId];
+        const url = useCutout ? (asset?.cutout || asset?.original) : asset?.original;
+        if (!url) return null;
+        return (
+          <div key={layer.id} role="button" tabIndex={0} aria-label="Drag clothing to adjust position"
+            className={`sc-garment-layer ${!previewMode && selectedId === layer.id ? "is-selected" : ""}`}
+            style={{ left: `${layer.x}%`, top: `${layer.y}%`, width: `${layer.width}%`, opacity: layer.opacity, transform: `rotate(${layer.rotation}deg)`, pointerEvents: previewMode ? "none" : "auto", cursor: previewMode ? "default" : "grab" }}
+            onClick={() => { if (!previewMode && !isCalibrating && !calibrationClick.current) setSelectedId(layer.id); }}
+            onKeyDown={(e) => { if (!previewMode && e.key === "Enter") setSelectedId(layer.id); }}
+            onPointerDown={(e) => pointerDown(e, layer)} onPointerMove={(e) => pointerMove(e, layer)}
+            onPointerUp={() => { start.current = null; }} onPointerCancel={() => { start.current = null; }}>
+            <img src={url} alt="Selected garment" draggable={false} />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export default function FittingRoom({ token, user }) {
+  // Supports both App.jsx versions (with or without the user prop).
+  let sessionUserId = "";
+  try { sessionUserId = JSON.parse(sessionStorage.getItem("stylecircle_session") || "{}").user?.id || ""; }
+  catch { /* An invalid session is handled by App.jsx. */ }
+  const draft = `stylecircle-draft:${user?.id || sessionUserId || "signed-in"}:fitting`;
+  const [bodyPhotos, setBodyPhotos] = useDraftState(`${draft}:bodyPhoto`, { front: null, back: null }, { memoryOnly: true });
+  const [layers, setLayers] = useDraftState(`${draft}:layers`, [], { memoryOnly: true });
+  const [selectedId, setSelectedId] = useDraftState(`${draft}:selectedId`, null, { memoryOnly: true });
+  const [avatarProfile, setAvatarProfile] = useDraftState(`${draft}:avatarProfile`, null, { memoryOnly: true });
+  const [generatingAvatar, setGeneratingAvatar] = useState(false);
+  const [view, setView] = useDraftState(`${draft}:view`, "front", { memoryOnly: true });
+  const [useCutout, setUseCutout] = useDraftState(`${draft}:cutout`, true, { memoryOnly: true });
+  // A clean final preview hides selection outlines and disables dragging.
+  const [previewMode, setPreviewMode] = useDraftState(`${draft}:previewMode`, false, { memoryOnly: true });
+  const [bodyPoints, setBodyPoints] = useDraftState(`${draft}:bodyPoints`, { front: [], back: [] }, { memoryOnly: true });
+  const [calibrationView, setCalibrationView] = useState(null);
+  const [filter, setFilter] = useState("all");
+  const [clothes, setClothes] = useState([]);
+  const [assets, setAssets] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    const controller = new AbortController();
+    (async () => {
+      setLoading(true);
+      try {
+        const response = await fetch(`${API_URL}/api/clothing-items`, { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal });
+        const data = await getResponseData(response);
+        if (!controller.signal.aborted) setClothes(data.items || []);
+      } catch (err) { if (!controller.signal.aborted) setError(err.message); }
+      finally { if (!controller.signal.aborted) setLoading(false); }
+    })();
+    return () => controller.abort();
+  }, [token]);
+
+  // Clothing images are fetched with authentication. URLs are destroyed on navigation.
+  useEffect(() => {
+    const controller = new AbortController();
+    const urls = [];
+    let cancelled = false;
+    const items = clothes.filter((item) => item.imagePublicId);
+    if (!items.length) { setAssets({}); return () => controller.abort(); }
+    (async () => {
+      setProcessing(true);
+      const pairs = await Promise.all(items.map(async (item) => {
+        try {
+          const response = await fetch(`${API_URL}/api/images/clothing/${item._id}`, {
+            headers: { Authorization: `Bearer ${token}` }, signal: controller.signal
+          });
+          if (!response.ok) return null;
+          const blob = await response.blob();
+          if (controller.signal.aborted) return null;
+          const original = URL.createObjectURL(blob); urls.push(original);
+          const cutout = await cutOutBackground(blob).catch(() => null);
+          if (controller.signal.aborted || cancelled) {
+            URL.revokeObjectURL(original);
+            if (cutout) URL.revokeObjectURL(cutout);
+            return null;
+          }
+          if (cutout) urls.push(cutout);
+          return [item._id, { original, cutout }];
+        } catch { return null; }
+      }));
+      if (!cancelled) { setAssets(Object.fromEntries(pairs.filter(Boolean))); setProcessing(false); }
+    })();
+    return () => { cancelled = true; controller.abort(); urls.forEach((url) => URL.revokeObjectURL(url)); };
+  }, [clothes, token]);
+
+  function uploadBody(event, which) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!ALLOWED.includes(file.type) || file.size > MAX_BYTES) {
+      setError("Choose JPG, PNG, or WebP photos up to 15 MB each."); return;
+    }
+    if (bodyPhotos[which]?.url) URL.revokeObjectURL(bodyPhotos[which].url);
+    setBodyPhotos((previous) => ({ ...previous, [which]: { url: URL.createObjectURL(file), name: file.name } }));
+    // The previous photo's body points no longer apply.
+    setBodyPoints((previous) => ({ ...previous, [which]: [] }));
+    setCalibrationView(null);
+    setAvatarProfile(null); // Invalidate measurements when a reference photo changes.
+    setError(""); setNotice(`${which === "front" ? "Front" : "Back"} photo added privately in this tab.`);
+    event.target.value = "";
+  }
+
+  async function generatePhotoGuidedAvatar() {
+    setError("");
+    if (!bodyPhotos.front?.url || !bodyPhotos.back?.url) {
+      setError("Upload both front and back photos to generate a photo-guided body profile.");
+      return;
+    }
+    setGeneratingAvatar(true);
+    setNotice("Analyzing your two photos locally. The pose model downloads once on first use…");
+    try {
+      const estimated = await analyzeBodyPhotos(bodyPhotos.front.url, bodyPhotos.back.url);
+      setAvatarProfile(estimated);
+      setNotice("Photo-guided body measurements completed. Your original photos remain your preview; a true 3D reconstruction requires a separate AI model.");
+    } catch (err) {
+      setError(err.message || "Photo analysis could not complete.");
+      setNotice("");
+    } finally { setGeneratingAvatar(false); }
+  }
+
+  function addGarment(item) {
+    setPreviewMode(false); // New layers are editable immediately.
+    if (!bodyPhotos[view]) { setError(`Upload your ${view} photo first.`); return; }
+    const current = layers.filter((layer) => layer.view === view);
+    if (current.length >= 8) { setError("Maximum 8 clothing layers per photo."); return; }
+    const id = layers.length ? Math.max(...layers.map((layer) => layer.id)) + 1 : 1;
+    const guided = alignedPosition(item.category, bodyPoints[view]);
+    setLayers((previous) => [...previous, { id, view, itemId: item._id, ...POSITIONS[item.category], ...guided, opacity: 0.97, rotation: guided?.rotation ?? 0 }]);
+    setSelectedId(id); setError(""); setNotice(`${item.name} added to your ${view} preview.`);
+  }
+  function updateLayer(id, patch) {
+    setLayers((previous) => previous.map((layer) => layer.id === id ? { ...layer, ...patch } : layer));
+  }
+
+  // Calibrate each photo separately, because front/back poses may differ.
+  function startBodyAlignment() {
+    if (!bodyPhotos[view]?.url) {
+      setError(`Upload your ${view} photo first.`); return;
+    }
+    setPreviewMode(false);
+    setCalibrationView(view);
+    setBodyPoints((old) => ({ ...old, [view]: [] }));
+    setError("");
+    setNotice("Click the LEFT shoulder, RIGHT shoulder, then WAIST CENTRE on the active photo.");
+  }
+
+  function handleCalibrationPoint(which, point) {
+    const next = [...(bodyPoints[which] || []), point].slice(0, 3);
+    setBodyPoints((old) => ({ ...old, [which]: next }));
+    if (next.length === 3) {
+      setCalibrationView(null);
+      const chosen = layers.find((layer) => layer.id === selectedId && layer.view === which);
+      const item = clothes.find((entry) => entry._id === chosen?.itemId);
+      const fit = item ? alignedPosition(item.category, next) : null;
+      if (chosen && fit) updateLayer(chosen.id, fit);
+      setNotice(fit
+        ? "Body points saved. Selected garment automatically aligned. You can fine-tune it below."
+        : "Body points saved. Add a top, jacket, dress, or bottom; then use Auto-fit.");
+    } else {
+      setNotice(`Now click the ${POINT_NAMES[next.length]}.`);
+    }
+  }
+
+  function autoFitSelected() {
+    const chosen = layers.find((layer) => layer.id === selectedId && layer.view === view);
+    const item = clothes.find((entry) => entry._id === chosen?.itemId);
+    const fit = item ? alignedPosition(item.category, bodyPoints[view]) : null;
+    if (!fit) {
+      setError("Select a top, bottom, jacket or dress, and mark three body points first.");
+      return;
+    }
+    updateLayer(chosen.id, fit);
+    setPreviewMode(false);
+    setError(""); setNotice("Garment aligned to your saved body points.");
+  }
+  const selected = layers.find((layer) => layer.id === selectedId && layer.view === view);
+  const selectedItem = clothes.find((item) => item._id === selected?.itemId);
+  const visible = clothes.filter((item) => item.imagePublicId && (filter === "all" || item.category === filter));
+
+  async function exportView(which) {
+    const photo = bodyPhotos[which];
+    if (!photo?.url) { setError(`Upload your ${which} photo first.`); return; }
+    setError(""); setExporting(true);
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = 900; canvas.height = 1200;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Canvas export is not available.");
+      drawCover(ctx, await loadImage(photo.url), canvas.width, canvas.height);
+      for (const layer of layers.filter((entry) => entry.view === which)) {
+        const asset = assets[layer.itemId];
+        const url = useCutout ? (asset?.cutout || asset?.original) : asset?.original;
+        if (!url) continue;
+        const img = await loadImage(url);
+        const w = (layer.width / 100) * canvas.width;
+        const h = w * img.naturalHeight / img.naturalWidth;
+        const x = (layer.x / 100) * canvas.width, y = (layer.y / 100) * canvas.height;
+        ctx.save(); ctx.globalAlpha = layer.opacity;
+        ctx.translate(x + w / 2, y + h / 2);
+        ctx.rotate((layer.rotation * Math.PI) / 180);
+        ctx.drawImage(img, -w / 2, -h / 2, w, h);
+        ctx.restore();
+      }
+      const blob = await canvasBlob(canvas);
+      const downloadUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = downloadUrl;
+      a.download = `StyleCircle-${which}-preview.png`;
+      document.body.appendChild(a); a.click(); a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+      setNotice(`${which} preview exported as PNG.`);
+    } catch (err) { setError(err.message); }
+    finally { setExporting(false); }
+  }
+
+  return (
+    <main className="editorial-page fitting-v2 sc-premium-studio">
+      <header className="sc-fit-heading sc-premium-heading">
+        <div className="sc-premium-eyebrow"><span className="sc-premium-sparkle">✧</span> STYLECIRCLE / THE PERSONAL ATELIER</div>
+        <h1>Your own <em>style studio.</em></h1>
+        <p>Style begins with you. Build an editorial fitting preview from your own front and back photos, then explore pieces from your closet.</p>
+        <div className="sc-premium-steps" aria-label="Studio workflow">
+          <span><b>01</b> Your photos</span><i />
+          <span><b>02</b> Explore your closet</span><i />
+          <span><b>03</b> Save your look</span>
+        </div>
+      </header>
+
+      <div className="sc-fitting-layout">
+        <aside className="sc-fit-panel sc-fit-setup">
+          <div className="sc-fit-panel__heading"><span>01</span><h2>Your photos</h2></div>
+          <p className="sc-hint">Two full-length photos are the starting point. Use even lighting, fitted clothes, and a simple background for the clearest preview.</p>
+          <p className="sc-private-tag">◈ Private · stored in this browser tab</p>
+          <div className="sc-photo-upload-grid">
+            {(["front", "back"]).map((which) => (
+              <label className="sc-photo-upload" key={which}>
+                {bodyPhotos[which]?.url ? <img src={bodyPhotos[which].url} alt={`${which} uploaded`} /> : <span className="sc-upload-icon">＋</span>}
+                <strong>{which === "front" ? "Front photo" : "Back photo"}</strong>
+                <small>{bodyPhotos[which] ? "Replace photo" : "Tap to upload"}</small>
+                <input type="file" accept={ALLOWED.join(",")} onChange={(event) => uploadBody(event, which)} />
+              </label>
+            ))}
+          </div>
+          <section className="sc-generate-avatar">
+            <strong>Photo-guided analysis</strong>
+            <p>Optional on-device proportion analysis to help guide garment positioning. This does not create a 3D model.</p>
+            <button type="button" className="button-primary"
+              onClick={generatePhotoGuidedAvatar}
+              disabled={!bodyPhotos.front?.url || !bodyPhotos.back?.url || generatingAvatar}>
+              {generatingAvatar ? "Analyzing your photos…" : avatarProfile ? "↻ Reanalyze photos" : "✧ Analyze my photos"}
+            </button>
+            {avatarProfile && <p className="sc-avatar-success" role="status">✓ Photo analysis complete. {avatarProfile.note}</p>}
+          </section>
+          <div className="sc-fit-panel__heading sc-section-heading"><span>02</span><h2>Fit controls</h2></div>
+          <>
+              <label className="sc-checkbox"><input type="checkbox" checked={useCutout} onChange={(e) => setUseCutout(e.target.checked)} /> Auto-remove plain backgrounds</label>
+              <p className="sc-hint">For the best cutout, upload a photo of the GARMENT ALONE against a plain background (not another person wearing it). Transparent margins are trimmed automatically. This does not generate realistic fabric draping.</p>
+              <div style={{ border: "1px solid var(--line)", borderRadius: 12, padding: 12, margin: "10px 0 15px" }}>
+                <strong style={{ display: "block", marginBottom: 6, fontSize: ".83rem" }}>✧ Body-guided Auto Fit</strong>
+                <p className="sc-hint">On your active {view} picture, mark three points: left shoulder → right shoulder → waist centre. Do this separately for front and back.</p>
+                <button type="button" className="button-outline" disabled={!bodyPhotos[view] || previewMode}
+                  onClick={calibrationView === view ? () => setCalibrationView(null) : startBodyAlignment}>
+                  {calibrationView === view ? "Cancel marking" : (bodyPoints[view]?.length === 3 ? "↻ Redo body points" : "＋ Mark body points")}
+                </button>
+                {calibrationView === view && <p className="sc-hint" role="status" style={{ fontWeight: 700, color: "var(--accent)" }}>
+                  Tap {POINT_NAMES[bodyPoints[view]?.length || 0]} on your {view} photo.
+                </p>}
+                {bodyPoints[view]?.length === 3 && <>
+                  <p className="sc-hint">✓ Body points saved for {view} view.</p>
+                  <button type="button" className="button-outline" disabled={!selected || previewMode} onClick={autoFitSelected}>Auto-fit selected garment</button>
+                </>}
+              </div>
+              {selected ? (
+                <div className="sc-fit-controls">
+                  <strong>{selectedItem?.name || "Selected garment"}</strong>
+                  <label>Size <input type="range" min="12" max="90" value={selected.width} onChange={(e) => updateLayer(selected.id, { width: Number(e.target.value), x: clamp(selected.x, 0, 100 - Number(e.target.value)) })} /> {selected.width}%</label>
+                  <label>Blend <input type="range" min="55" max="100" value={Math.round(selected.opacity * 100)} onChange={(e) => updateLayer(selected.id, { opacity: Number(e.target.value) / 100 })} /> {Math.round(selected.opacity * 100)}%</label>
+                  <label>Rotation <input type="range" min="-40" max="40" value={selected.rotation} onChange={(e) => updateLayer(selected.id, { rotation: Number(e.target.value) })} /> {selected.rotation}°</label>
+                  <div className="sc-mini-actions">
+                    <button type="button" onClick={() => updateLayer(selected.id, { x: clamp(selected.x - 3, 0, 100 - selected.width) })}>←</button>
+                    <button type="button" onClick={() => updateLayer(selected.id, { y: clamp(selected.y - 3, 0, 95) })}>↑</button>
+                    <button type="button" onClick={() => updateLayer(selected.id, { y: clamp(selected.y + 3, 0, 95) })}>↓</button>
+                    <button type="button" onClick={() => updateLayer(selected.id, { x: clamp(selected.x + 3, 0, 100 - selected.width) })}>→</button>
+                  </div>
+                  <div className="sc-mini-actions">
+                    <button type="button" onClick={() => setLayers((old) => [...old.filter((l) => l.id !== selected.id), selected])}>To front</button>
+                    <button type="button" onClick={() => { setLayers((old) => old.filter((l) => l.id !== selected.id)); setSelectedId(null); }}>Remove</button>
+                  </div>
+                </div>
+              ) : <p className="sc-hint">Choose a garment to adjust its size, rotation, and blending.</p>}
+          </>
+          <Link to="/wardrobe" className="sc-closet-link">← Manage My Closet</Link>
+        </aside>
+
+        <section className="sc-fit-panel sc-fit-main">
+          <>
+              <div className="sc-photo-heading">
+                <div><p className="eyebrow">YOUR OWN LOOK</p><h2>Try it on me</h2></div>
+                <div className="sc-view-tabs">
+                  <button type="button" className={view === "front" ? "active" : ""} onClick={() => { setView("front"); setSelectedId(null); setCalibrationView(null); }}>Front</button>
+                  <button type="button" className={view === "back" ? "active" : ""} onClick={() => { setView("back"); setSelectedId(null); setCalibrationView(null); }}>Back</button>
+                </div>
+              </div>
+              <div className="sc-premium-viewer">
+                <div className="sc-premium-viewer-top">
+                  <span>✦ LIVE PHOTO PREVIEW</span>
+                  <span>{view === "front" ? "FRONT VIEW" : "BACK VIEW"}</span>
+                </div>
+                <div className="sc-premium-stage">
+                  <PhotoStage view={view} photo={bodyPhotos[view]} layers={layers} assets={assets} useCutout={useCutout} selectedId={selectedId} setSelectedId={setSelectedId} previewMode={previewMode}
+                    calibrationPoints={bodyPoints[view] || []} isCalibrating={calibrationView === view}
+                    onCalibrationPoint={handleCalibrationPoint}
+                    onMove={(id, x, y) => updateLayer(id, { x, y })} />
+                </div>
+                <div className="sc-premium-stage-footer"><span>STYLECIRCLE</span><span>YOUR BODY · YOUR STYLE</span></div>
+              </div>
+              <div className="sc-premium-angle-picker" aria-label="Choose reference photo">
+                {(["front", "back"]).map((which) => (
+                  <button key={which} type="button" className={view === which ? "is-active" : ""}
+                    onClick={() => { setView(which); setSelectedId(null); setCalibrationView(null); }}>
+                    {bodyPhotos[which]?.url ? <img src={bodyPhotos[which].url} alt="" /> : <span className="sc-premium-empty-thumb">＋</span>}
+                    <span>{which === "front" ? "Front view" : "Back view"}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="sc-hint">{previewMode ? "Preview mode: editing handles are hidden for a clean, presentation-ready look." : "Use body-guided positioning to refine the fit. This is a photographic overlay, not an AI garment simulation."}</p>
+              <div className="sc-main-actions">
+                <button className="button-outline" type="button" disabled={!bodyPhotos[view]} onClick={() => { setPreviewMode((previous) => !previous); setSelectedId(null); setCalibrationView(null); }}>
+                  {previewMode ? "✎ Edit again" : "✓ Finish editing"}
+                </button>
+                <button className="button-primary" type="button" disabled={!bodyPhotos[view] || exporting} onClick={() => { setSelectedId(null); exportView(view); }}>{exporting ? "Exporting…" : `↓ Export ${view} PNG`}</button>
+                <button className="button-outline" type="button" onClick={() => { setLayers((old) => old.filter((layer) => layer.view !== view)); setSelectedId(null); }}>Clear {view} layers</button>
+              </div>
+          </>
+        </section>
+
+        <aside className="sc-fit-panel sc-fit-closet">
+          <div className="sc-fit-panel__heading"><span>03</span><h2>My Closet</h2></div>
+          <p className="sc-hint">Choose real pieces you've uploaded. Click an item to try it on your {view} photo.</p>
+          <select aria-label="Filter clothes by category" value={filter} onChange={(e) => setFilter(e.target.value)}>
+            {CATEGORIES.map((category) => <option value={category} key={category}>{LABELS[category]}</option>)}
+          </select>
+          {loading && <p>Loading your closet…</p>}
+          {processing && <p className="sc-hint">Preparing clothing previews…</p>}
+          {!loading && !visible.length && <p className="sc-hint">No clothing with photos yet. <Link to="/wardrobe">Upload a clothing photo</Link> first.</p>}
+          <div className="sc-wardrobe-grid">
+            {visible.map((item) => (
+              <button type="button" key={item._id} onClick={() => addGarment(item)} title={`Try ${item.name}`}>
+                <ClothingPreview item={item} token={token} size={115} />
+                <span>{item.name}</span>
+              </button>
+            ))}
+          </div>
+        </aside>
+      </div>
+      {(error || notice) && <p className={`sc-fit-feedback ${error ? "is-error" : ""}`} role={error ? "alert" : "status"}>{error || notice}</p>}
+      <p className="sc-fit-disclaimer">Your personal photos stay local to this browser tab. Pose analysis runs locally using an on-device MediaPipe model (downloaded from Google/CDN on first use), and no body photo is uploaded to StyleCircle servers. For realistic generative try-on, we'll integrate a separately chosen, properly licensed model later.</p>
+    </main>
+  );
+}
