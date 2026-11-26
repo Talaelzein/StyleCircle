@@ -154,14 +154,14 @@ function FitCheckCard({ poll, token, busyId, onVote, onShare, onClose, onDelete 
               <ul>
                 {(look.pieces || []).map((piece, i) => (
                   <li key={i}>
-                    {piece.name} â€” {piece.category}
+                    {piece.name} - {piece.category}
                     {piece.color ? ` (${piece.color})` : ""}
                   </li>
                 ))}
               </ul>
 
               <p>
-                <strong>{votes} vote(s)</strong> â€” {percentage}%
+                <strong>{votes} vote(s)</strong> - {percentage}%
               </p>
 
               {!poll.isOwner && poll.status === "open" && (
@@ -170,7 +170,7 @@ function FitCheckCard({ poll, token, busyId, onVote, onShare, onClose, onDelete 
                   disabled={busy}
                   onClick={() => onVote(poll._id, choice)}
                 >
-                  {poll.myVote === choice ? `Voted ${choice} âœ“`: `Vote for ${choice}`}
+                  {poll.myVote === choice ? `Voted ${choice}` : `Vote for ${choice}`}
                 </button>
               )}
             </section>
@@ -404,7 +404,7 @@ export default function FitCheck({ token, user }) {
       <h1>Style<span>Circle</span></h1>
 
       <section className="panel">
-        <h2>FitCheck â€” A or B? ðŸ’•</h2>
+        <h2>FitCheck: A or B?</h2>
 
         <p>
           Can't decide what to wear?
