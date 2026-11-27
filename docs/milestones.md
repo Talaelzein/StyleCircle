@@ -31,7 +31,7 @@ This file is the requested short public progress update for each milestone. It l
 - MongoDB Atlas is used for production persistence.
 - Server secrets are configured on the hosting provider, not in Git.
 - The project owner manually verified login/logout, wardrobe and outfit persistence, FitCheck votes, navigation, and supporting pages on the live site.
-- **Before submission:** Add the exact public frontend and API URLs to the root `README.md`, and repeat a fresh-browser smoke test.
+- Public frontend: https://style-circle.vercel.app/; public backend API: https://stylecircle.onrender.com; API health route: https://stylecircle.onrender.com/api/health. URLs were supplied by the project owner for the final README; final live availability should be checked from an ordinary browser before submission.
 
 ## Grader access
-See the root `README.md` for installation, testing, and the exact public links once finalized. The application requires signup/login for private functionality. The Hugging Face AI generation service has daily GPU quota limits; a previously generated example is available for a demo even if the external service has no remaining quota.
+See the root `README.md` for installation, testing, and the exact public links. The application requires signup/login for private functionality. The Hugging Face AI generation service has daily GPU quota limits; a previously generated example is available for a demo even if the external service has no remaining quota.
