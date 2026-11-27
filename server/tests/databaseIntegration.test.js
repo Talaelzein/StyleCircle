@@ -6,7 +6,7 @@ import app from "../src/app.js";
 import FitCheckVote from "../src/models/FitCheckVote.js";
 
 const mongoUrl = process.env.TEST_MONGO_URI;
-const integration = mongoUrl ? describe.sequential : describe.skip;
+const integration = mongoUrl ? describe : describe.skip;
 const secret = "capstone-mongodb-integration-tests-only-key";
 const ownerId = "507f1f77bcf86cd799439121";
 const voterId = "507f1f77bcf86cd799439122";
