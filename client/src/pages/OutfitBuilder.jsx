@@ -8,6 +8,7 @@ import {
 } from "../services/api";
 
 import ClothingPicker from "../components/outfits/ClothingPicker.jsx";
+import ClothingPreview from "../components/ClothingPreview.jsx";
 import useDraftState from "../hooks/useDraftState.js";
 
 const emptyForm = () => ({
