@@ -6,11 +6,11 @@ StyleCircle is a full-stack web application for managing a digital wardrobe, cre
 
 ## Live application
 
-> **Submission preflight:** Replace both markers below with the **exact public production URLs** before merging or submitting. Do not use Vercel or Render dashboard links.
+> **Public links for the capstone grader:** Open the deployed frontend directly. The API health endpoint is public; other API features require appropriate authentication.
 
-- **Frontend (Vercel):** `REPLACE_WITH_EXACT_PUBLIC_VERCEL_URL`
-- **Backend API (Render):** `REPLACE_WITH_EXACT_PUBLIC_RENDER_URL`
-- **API health check:** `REPLACE_WITH_EXACT_PUBLIC_RENDER_URL/api/health`
+- **Frontend (Vercel):** https://style-circle.vercel.app/
+- **Backend API (Render):** https://stylecircle.onrender.com
+- **API health check:** https://stylecircle.onrender.com/api/health
 
 The frontend requires signup or login to access private features. The health endpoint is public.
 
