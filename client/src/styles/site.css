@@ -212,3 +212,10 @@
 .outfit-clothing-option:focus-within { outline:3px solid var(--accent);outline-offset:2px; }
 
 .saved-outfit-piece {padding:10px;border:1px solid var(--line);background:var(--card);border-radius:12px;}
+
+/* Reusable saved-outfit presentation (replaces scattered inline styling). */
+.saved-outfit-list { display:grid;gap:18px; }
+.saved-outfit-card { background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px; }
+.saved-outfit-pieces { display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;margin-bottom:16px; }
+.saved-outfit-piece { padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--paper); }
+.saved-outfit-card .button-outline { margin-right:8px; }

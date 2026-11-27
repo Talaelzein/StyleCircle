@@ -11,12 +11,7 @@ export default function SavedOutfitsList({ outfits, token, deletingId, onEdit, o
                 You haven't saved any outfits yet.
               </p>
             ) : (
-              <div
-                style={{
-                  display: "grid",
-                  gap: "18px"
-                }}
-              >
+              <div className="saved-outfit-list">
                 {outfits.map((outfit) => {
                   const pieces = (
                     outfit.clothingItemIds || []
@@ -24,7 +19,7 @@ export default function SavedOutfitsList({ outfits, token, deletingId, onEdit, o
 
                   return (
                     <article
-                      className="clothing-card"
+                      className="clothing-card saved-outfit-card"
                       key={outfit._id}
                     >
                       <h3>{outfit.name}</h3>
@@ -44,24 +39,9 @@ export default function SavedOutfitsList({ outfits, token, deletingId, onEdit, o
 
                       <h4>Clothing Pieces</h4>
 
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns:
-                            "repeat(auto-fill, minmax(130px, 1fr))",
-                          gap: "12px",
-                          marginBottom: "16px"
-                        }}
-                      >
+                      <div className="saved-outfit-pieces">
                         {pieces.map((item) => (
-                          <div
-                            key={item._id}
-                            style={{
-                              padding: "10px",
-                              border: "1px solid #ddd",
-                              borderRadius: "12px"
-                            }}
-                          >
+                          <div key={item._id} className="saved-outfit-piece">
                             <ClothingPreview
                               item={item}
                               token={token}
@@ -91,9 +71,9 @@ export default function SavedOutfitsList({ outfits, token, deletingId, onEdit, o
 
                       <button
                         type="button"
-                        onClick={() =>
-                          onEdit(outfit)
-                        }
+                        className="button-outline"
+                        aria-label={`Edit outfit ${outfit.name}`}
+                        onClick={() => onEdit(outfit)}
                       >
                         Edit
                       </button>
@@ -102,6 +82,8 @@ export default function SavedOutfitsList({ outfits, token, deletingId, onEdit, o
 
                       <button
                         type="button"
+                        className="button-outline"
+                        aria-label={`Delete outfit ${outfit.name}`}
                         disabled={
                           deletingId === outfit._id
                         }
