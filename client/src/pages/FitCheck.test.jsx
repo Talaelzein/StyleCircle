@@ -31,7 +31,8 @@ describe("StyleCircle FitCheck", () => {
       status: "open",
       isOwner: false,
       myVote: null,
-      votes: { A: 2, B: 1 },
+      votes: null,
+      canViewResults: false,
       looks: [
         { label: "A", name: "Casual Look", pieces: [
           { name: "White Shirt", category: "top", color: "White" }
@@ -61,17 +62,18 @@ describe("StyleCircle FitCheck", () => {
       "Which outfit should I wear?"
     )).toBeInTheDocument();
 
+    expect(screen.getByText("Vote to reveal the results.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", {
       name: "Vote for A"
     }));
 
     expect(await screen.findByText(
-      "Your vote was saved!"
+      "Your final vote was saved!"
     )).toBeInTheDocument();
 
-    expect(screen.getByRole("button", {
-      name: /Voted A/
-    })).toBeInTheDocument();
+    expect(screen.getByText("Your final vote: A")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Vote for B/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/3 vote\(s\)/)).toBeInTheDocument();
   });
 
   it("creates a poll using two saved outfits", async () => {
