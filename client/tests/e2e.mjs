@@ -58,11 +58,69 @@ try {
   const item = (await create.json()).item;
   assert.ok(item?._id, "Created clothing item should have an ID");
 
+  // A second item enables a complete browser-level saved-outfit flow.
+  const secondCreate = await fetch(API + "/api/clothing-items", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer " + state.token
+    },
+    body: JSON.stringify({ name: "Browser E2E Black Jeans", category: "bottom", color: "Black" })
+  });
+  assert.equal(secondCreate.status, 201);
+  const secondItem = (await secondCreate.json()).item;
+  assert.ok(secondItem?._id);
+
   await page.goto(FRONTEND + "/wardrobe/top");
   await page.getByText("Browser E2E White Shirt").first().waitFor();
   await page.reload({ waitUntil: "networkidle" });
   await page.getByText("Browser E2E White Shirt").first().waitFor();
   await page.screenshot({ path: OUT + "/wardrobe-desktop.png", fullPage: true });
+
+  // Save a real outfit from the React UI; verify persistence after refresh.
+  await page.goto(FRONTEND + "/outfits", { waitUntil: "networkidle" });
+  await page.getByLabel("Outfit Name").fill("Browser E2E Casual Outfit");
+  await page.getByRole("checkbox", { name: "Select Browser E2E White Shirt" }).check();
+  await page.getByRole("checkbox", { name: "Select Browser E2E Black Jeans" }).check();
+  await page.getByRole("button", { name: "Save Outfit" }).click();
+  await page.getByText("Outfit saved successfully!").waitFor();
+  await page.reload({ waitUntil: "networkidle" });
+  await page.getByText("Browser E2E Casual Outfit", { exact: true }).first().waitFor();
+  await page.screenshot({ path: OUT + "/outfits-desktop.png", fullPage: true });
+
+  const outfitsResponse = await fetch(API + "/api/outfits", {
+    headers: { Authorization: "Bearer " + state.token }
+  });
+  assert.equal(outfitsResponse.status, 200);
+  const outfits = (await outfitsResponse.json()).outfits;
+  const firstOutfit = outfits.find((o) => o.name === "Browser E2E Casual Outfit");
+  assert.ok(firstOutfit?._id, "The outfit created in React should exist in MongoDB");
+
+  // The second outfit is generated through the API to keep UI creation
+  // coverage focused, then FitCheck posting is exercised through React.
+  const secondOutfitResponse = await fetch(API + "/api/outfits", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer " + state.token
+    },
+    body: JSON.stringify({
+      name: "Browser E2E Smart Outfit",
+      clothingItemIds: [item._id, secondItem._id]
+    })
+  });
+  assert.equal(secondOutfitResponse.status, 201);
+  const secondOutfit = (await secondOutfitResponse.json()).outfit;
+  await page.goto(FRONTEND + "/fitchecks", { waitUntil: "networkidle" });
+  await page.getByLabel("Your question").fill("Which outfit should I wear to university?");
+  await page.getByLabel("Outfit A").selectOption(firstOutfit._id);
+  await page.getByLabel("Outfit B").selectOption(secondOutfit._id);
+  await page.getByRole("button", { name: "Post FitCheck" }).click();
+  await page.getByText("Your FitCheck is now posted!").waitFor();
+  await page.getByText("Which outfit should I wear to university?").first().waitFor();
+  await page.reload({ waitUntil: "networkidle" });
+  await page.getByText("Which outfit should I wear to university?").first().waitFor();
+  await page.screenshot({ path: OUT + "/fitcheck-desktop.png", fullPage: true });
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(FRONTEND + "/home");
@@ -113,7 +171,7 @@ try {
     "Signup has serious/critical accessibility violations: " + JSON.stringify(signupIssues.map(v => v.id)));
   assert.equal(homeIssues.length, 0,
     "Home has serious/critical accessibility violations: " + JSON.stringify(homeIssues.map(v => v.id)));
-  console.log("Browser E2E PASS: signup, database-backed wardrobe, refresh, all feature routes desktop/mobile, accessibility, no uncaught errors");
+  console.log("Browser E2E PASS: signup, wardrobe, React outfit save/refresh, React FitCheck post/refresh, all feature routes desktop/mobile, accessibility, no uncaught errors");
 } finally {
   await browser.close();
 }
