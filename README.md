@@ -32,7 +32,7 @@ The frontend requires signup or login to access private features. The health end
 ## Main features
 
 - **My Closet:** add, browse, search, edit and delete clothing, photos and wardrobe metadata. Items used in a saved outfit cannot be deleted until removed from that outfit; the app explains this restriction. Photos referenced by shared FitChecks are retained.
-- **Outfits:** build and save outfits from 2–10 distinct wardrobe items.
+- **Outfits:** build and save outfits from 2–10 distinct wardrobe items. Active scheduled Planner outfits are protected from deletion; historical wear logs preserve usage information.
 - **Mix & Match:** rule-based styling suggestions considering occasion, style, season and user-selected weather; lock or replace clothing pieces, and save a look.
 - **FitCheck:** social comparison of two outfits, with one final vote per account (no changes), poll closure and owner self-vote prevention. Vote totals stay hidden from nonvoters while the poll is open; voters and the poll owner can see them, and closed polls show final totals.
 - **Planner:** calendar planning and recording what was worn.

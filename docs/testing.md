@@ -33,7 +33,7 @@ After deploying these changes to the live app, repeat the Incognito login, wardr
 
 ## Automated browser and accessibility checks
 
-The CI `browser_e2e` job runs Chromium against a **local React frontend and Express API connected to an isolated MongoDB service**. `client/tests/e2e.mjs` signs up a temporary test user, verifies authenticated data and persistence across a page refresh, checks a 390 px viewport, records screenshots, reports serious/critical axe-core accessibility findings, and fails on uncaught page errors. The generated screenshots and logs are uploaded as a short-lived GitHub Actions artifact. This is separate from production Vercel/Render testing.
+The CI `browser_e2e` job runs Chromium against a **local React frontend and Express API connected to an isolated MongoDB service**. `client/tests/e2e.mjs` signs up a test account, stores four clothing pieces, creates two saved outfits through the UI, reloads and verifies persistence, posts a FitCheck, signs up a second account to verify that totals are hidden before voting and one final vote is enforced, visits all principal routes, checks desktop/mobile responsiveness (390 px), and fails on uncaught JavaScript errors. Axe-core scans each tested route **after session restoration** and rejects any accessibility rule violation, including moderate ones. Screenshots and logs are uploaded to GitHub Actions for seven days. This runs against a disposable local database, not production Vercel/Render.
 
 ## Dependency security audit
 

@@ -28,6 +28,8 @@ Every protected wardrobe request filters by the authenticated `ownerId`; users c
 - Creating or editing outfits verifies that every referenced clothing item belongs to the logged-in user.
 - Mongoose `populate()` expands references when retrieving outfits.
 - The clothing deletion API returns HTTP 409 if a saved outfit still contains the garment, preventing new dangling wardrobe references.
+- Deleting a clothing item also pulls its identifier from packing-list and wear-entry arrays; shared FitCheck snapshots retain their separate photo references.
+- Deleting a saved outfit returns HTTP 409 while it is scheduled in an incomplete Planner entry. Once removed from the plan, an old outfit can be deleted, and historical wear logs keep their item records but clear obsolete outfit references.
 
 ## FitCheck (`FitCheck.js`)
 - `_id`: ObjectId; `ownerId`: required User reference.
