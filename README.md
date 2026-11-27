@@ -31,10 +31,10 @@ The frontend requires signup or login to access private features. The health end
 
 ## Main features
 
-- **My Closet:** add, browse, search, edit and delete clothing, photos and wardrobe metadata.
+- **My Closet:** add, browse, search, edit and delete clothing, photos and wardrobe metadata. Items used in a saved outfit cannot be deleted until removed from that outfit; the app explains this restriction. Photos referenced by shared FitChecks are retained.
 - **Outfits:** build and save outfits from 2–10 distinct wardrobe items.
 - **Mix & Match:** rule-based styling suggestions considering occasion, style, season and user-selected weather; lock or replace clothing pieces, and save a look.
-- **FitCheck:** social comparison of two outfits, with voting, vote changes, poll closure and owner self-vote prevention.
+- **FitCheck:** social comparison of two outfits, with one final vote per account (no changes), poll closure and owner self-vote prevention. Vote totals stay hidden from nonvoters while the poll is open; voters and the poll owner can see them, and closed polls show final totals.
 - **Planner:** calendar planning and recording what was worn.
 - **Packing:** pack lists linked to wardrobe items.
 - **Wishlist:** save products, references, price notes and images.
@@ -114,11 +114,11 @@ npm run dev
 | `POST /api/auth/login` | Authenticate and receive JWT |
 | `GET /api/auth/me` | Get current authenticated user |
 | `GET/POST /api/clothing-items` | List or create clothes |
-| `GET/PATCH/DELETE /api/clothing-items/:id` | View, edit or delete clothing |
+| `GET/PATCH/DELETE /api/clothing-items/:id` | View, edit or delete clothing (409 when referenced by a saved outfit) |
 | `GET/POST /api/outfits` | List or create outfits |
 | `GET/PATCH/DELETE /api/outfits/:id` | View, edit or delete outfit |
 | `GET/POST /api/fitchecks` | Community FitCheck polls |
-| `PUT /api/fitchecks/:id/vote` | Vote or change vote |
+| `PUT /api/fitchecks/:id/vote` | Cast one final vote (409 if a second, different choice is attempted) |
 | `GET/POST/PATCH/DELETE /api/entries...` | Planner, wear logs, packing, wishlist and moodboards |
 | `POST /api/suggestions/generate` | Generate rule-based outfit suggestions |
 | `POST /api/try-on` | Generate AI try-on via an authenticated backend proxy |
@@ -127,7 +127,7 @@ Most resource endpoints require `Authorization: Bearer <JWT>`; see `server/src/r
 
 ## Tests and verification
 
-GitHub Actions runs frontend unit tests, backend security and algorithm tests, and a production frontend build for pull requests.
+GitHub Actions runs frontend unit tests and build checks, backend security/algorithm tests, and MongoDB-backed API integration tests using a disposable MongoDB service.
 
 ```bash
 # In client/
@@ -138,9 +138,12 @@ npm run build
 # In server/
 npm ci
 npm test
+# To run the database integration tests as well, start a disposable MongoDB
+# instance locally and set TEST_MONGO_URI=mongodb://127.0.0.1:27017/stylecircle_ci
 ```
 
 - [Testing and acceptance checklist](docs/testing.md)
+- [Final remediation review and regression-test evidence](docs/remediation.md)
 - [Postman Milestone 2 collection](postman/StyleCircle_Milestone2.postman_collection.json)
 
 ## Capstone documentation
