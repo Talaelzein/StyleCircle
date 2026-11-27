@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import ClothingPreview from "../components/ClothingPreview.jsx";
+import StudioResultViewer from "../components/studio/StudioResultViewer.jsx";
 import { API_URL, getResponseData } from "../services/api.js";
 import { generateTryOn } from "../services/tryOn.js";
 import "../styles/fitting-room.css";
@@ -418,6 +419,7 @@ export default function FittingRoom({ token }) {
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
                 disabled={generating}
+                aria-label={photo ? "Change photograph" : "Upload photograph"}
                 onChange={uploadPhoto}
               />
 
@@ -553,101 +555,14 @@ export default function FittingRoom({ token }) {
           </p>
         </aside>
 
-        <section className="auto-studio-panel auto-studio-viewer">
-          <h2>Your fitting room</h2>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              gap: 16
-            }}
-          >
-            <div>
-              <h3 style={{ textAlign: "center" }}>Before</h3>
-
-              <div
-                className="auto-studio-stage"
-                style={{ minHeight: 440 }}
-              >
-                {photo ? (
-                  <img
-                    className="auto-studio-body"
-                    src={photo.url}
-                    alt="Original full-body photograph"
-                  />
-                ) : (
-                  <div className="auto-studio-empty">
-                    <h3>Your photo</h3>
-                    <p>Upload a full-body photograph.</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <h3 style={{ textAlign: "center" }}>AI Try-On</h3>
-
-              <div
-                className="auto-studio-stage"
-                style={{ minHeight: 440 }}
-              >
-                {result ? (
-                  <img
-                    className="auto-studio-body"
-                    src={result.url}
-                    alt="Realistic AI-generated clothing try-on"
-                  />
-                ) : (
-                  <div className="auto-studio-empty">
-                    <span>✦</span>
-                    <h3>
-                      {generating
-                        ? "AI is creating your look"
-                        : "Your new look"}
-                    </h3>
-                    <p>
-                      {generating
-                        ? "Generating with the selected AI model..."
-                        : "Choose one or more garments and generate a preview."}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="auto-studio-actions">
-            <button
-              className="auto-studio-primary"
-              type="button"
-              disabled={!result}
-              onClick={downloadResult}
-            >
-              Download Result
-            </button>
-
-            <label
-              className="auto-studio-secondary"
-              style={{ cursor: "pointer" }}
-            >
-              Import generated result
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                disabled={!photo || !selectedItems.length || generating}
-                onChange={importResult}
-                style={{ display: "none" }}
-              />
-            </label>
-          </div>
-
-          <p className="auto-studio-disclaimer">
-            AI-generated visualization, not an exact prediction
-            of garment fit or size. External research models are
-            used; results and availability may vary.
-          </p>
-        </section>
+        <StudioResultViewer
+          photo={photo}
+          result={result}
+          generating={generating}
+          hasSelection={selectedItems.length > 0}
+          downloadResult={downloadResult}
+          importResult={importResult}
+        />
       </div>
 
       {error && (

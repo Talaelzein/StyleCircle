@@ -425,3 +425,8 @@
   max-height: none;
   object-fit: contain;
 }
+/* Keep file controls keyboard-operable while preserving the existing label styling. */
+.auto-studio-import { position:relative; cursor:pointer; }
+.auto-studio-import input { position:absolute; width:1px; height:1px; opacity:0; }
+.auto-studio-import:focus-within, .auto-studio-upload label:focus-within { outline:3px solid var(--accent, #8d273e); outline-offset:3px; }
+.auto-studio-import:has(input:disabled) { opacity:.5; cursor:not-allowed; }
