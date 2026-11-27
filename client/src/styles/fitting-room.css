@@ -45,7 +45,7 @@
 }
 
 .auto-studio-heading p {
-  color: #786b63;
+  color: #5f5048;
   line-height: 1.6;
   max-width: 680px;
 }
@@ -78,7 +78,7 @@
 
 .auto-studio-hint,
 .auto-studio-disclaimer {
-  color: #827369;
+  color: #5f5048;
   font-size: 13px;
   line-height: 1.65;
 }
@@ -167,7 +167,7 @@
 }
 
 .auto-studio-picked small {
-  color: #8c7b70;
+  color: #5f5048;
 }
 
 .auto-studio-picked button {
@@ -241,7 +241,7 @@
   text-align: center;
   max-width: 300px;
   padding: 30px;
-  color: #826a60;
+  color: #594943;
 }
 
 .auto-studio-empty > span {
@@ -337,7 +337,7 @@
 }
 
 .auto-studio-clothes small {
-  color: #88766b;
+  color: #5f5048;
   text-transform: capitalize;
 }
 
