@@ -425,3 +425,20 @@
   max-height: none;
   object-fit: contain;
 }
+/* Accessibility regression: neutral helper text previously had borderline
+   WCAG contrast on the ivory panels and grey preview stages. Use darker,
+   visually consistent editorial neutrals rather than hiding axe findings. */
+.auto-studio .auto-studio-hint,
+.auto-studio .auto-studio-disclaimer {
+  color: #554741;
+}
+.auto-studio .auto-studio-empty {
+  color: #483a35;
+}
+.auto-studio .auto-studio-picked small,
+.auto-studio .auto-studio-clothes small {
+  color: #554741;
+}
+.auto-studio .auto-studio-add {
+  color: #763345;
+}
