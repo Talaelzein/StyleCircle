@@ -164,3 +164,5 @@ The `README_FIRST.md` file is historical setup material from an earlier prototyp
 - Imported and generated try-on preview images are stored in the current browser (IndexedDB) where supported, not automatically synced across accounts/devices.
 - The app uses selected weather preferences for styling suggestions; it does **not** fetch live weather automatically.
 - The project is an educational capstone, not a production-scale paid inference service.
+
+For the final release review, see [full-mark acceptance criteria](docs/full-mark-acceptance.md).

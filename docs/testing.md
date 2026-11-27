@@ -33,7 +33,7 @@ After deploying these changes to the live app, repeat the Incognito login, wardr
 
 ## Automated browser and accessibility checks
 
-The CI `browser_e2e` job runs Chromium against a **local React frontend and Express API connected to an isolated MongoDB service**. `client/tests/e2e.mjs` signs up a temporary test user, verifies authenticated data and persistence across a page refresh, checks a 390 px viewport, records screenshots, reports serious/critical axe-core accessibility findings, and fails on uncaught page errors. The generated screenshots and logs are uploaded as a short-lived GitHub Actions artifact. This is separate from production Vercel/Render testing.
+The CI `browser_e2e` job runs Chromium against a **local React frontend and Express API connected to an isolated MongoDB service**. `client/tests/e2e.mjs` signs up temporary test users and drives wardrobe creation, editing, deletion, saved outfit creation and persistence, safe reference deletion, and two-account FitCheck voting through the browser. It records 390 px viewport screenshots and accessibility/overflow inventories across protected pages; signup and Home have serious/critical accessibility gates, and uncaught page errors fail the run. The generated screenshots and logs are uploaded as a short-lived GitHub Actions artifact. This is separate from production Vercel/Render testing.
 
 ## Dependency security audit
 
@@ -70,3 +70,7 @@ These are observed checks, not a guarantee that every data-manipulation path or 
 - AI output is a front-view visual approximation and is not size-accurate or photorealistic 360-degree reconstruction.
 - Browser IndexedDB stores imported/generated try-on previews locally; they do not automatically synchronize between devices.
 - A successful automated test run does not guarantee high-availability hosting or third-party inference.
+
+## External provider boundary
+
+`server/tests/tryOnBoundary.test.js` substitutes a fake Gradio client to verify valid image inputs, rejected spoofed images, category validation, successful response handling, quota errors and safe failure responses. No real Hugging Face inference is triggered by this test. Review [full-mark acceptance criteria](full-mark-acceptance.md) for the remaining production sign-off.
