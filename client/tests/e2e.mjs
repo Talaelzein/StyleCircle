@@ -75,12 +75,45 @@ try {
   assert.ok(viewport.documentWidth <= viewport.viewportWidth + 2,
     "Mobile page must not create horizontal page overflow: " + JSON.stringify(viewport));
 
+
+  // Exercise EVERY authenticated route, not just the homepage and closet.
+  // Check both desktop/mobile layouts, uncaught errors and high-risk
+  // accessibility violations. This detects regressions across actual pages.
+  const featureRoutes = [
+    "/home", "/wardrobe", "/wardrobe/top", "/outfits",
+    "/suggestions", "/fitchecks", "/planner", "/packing",
+    "/wishlist", "/moodboards", "/insights", "/fitting-room"
+  ];
+  const violations = [];
+  for (const route of featureRoutes) {
+    await page.setViewportSize({ width: 1280, height: 850 });
+    await page.goto(FRONTEND + route, { waitUntil: "networkidle" });
+    await page.locator("main").first().waitFor();
+    assert.ok(!page.url().endsWith("/login"),
+      "Protected route unexpectedly redirected to login: " + route);
+    const desktopIssues = await checkAccessibility(route + " desktop");
+    violations.push(...desktopIssues.map(v => ({ route, width: 1280, id: v.id, impact: v.impact, nodes: v.nodes.length })));
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.reload({ waitUntil: "networkidle" });
+    const dimensions = await page.evaluate(() => ({
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: window.innerWidth
+    }));
+    assert.ok(dimensions.documentWidth <= dimensions.viewportWidth + 2,
+      "Mobile horizontal overflow on " + route + ": " + JSON.stringify(dimensions));
+    const mobileIssues = await checkAccessibility(route + " mobile");
+    violations.push(...mobileIssues.map(v => ({ route, width: 390, id: v.id, impact: v.impact, nodes: v.nodes.length })));
+  }
+  assert.deepEqual(violations, [],
+    "Serious/critical accessibility violations on feature pages: " + JSON.stringify(violations));
+
   assert.deepEqual(errors, [], "React must not throw uncaught browser errors");
   assert.equal(signupIssues.length, 0,
     "Signup has serious/critical accessibility violations: " + JSON.stringify(signupIssues.map(v => v.id)));
   assert.equal(homeIssues.length, 0,
     "Home has serious/critical accessibility violations: " + JSON.stringify(homeIssues.map(v => v.id)));
-  console.log("Browser E2E PASS: signup, database-backed wardrobe, refresh, mobile viewport, accessibility, no uncaught errors");
+  console.log("Browser E2E PASS: signup, database-backed wardrobe, refresh, all feature routes desktop/mobile, accessibility, no uncaught errors");
 } finally {
   await browser.close();
 }
