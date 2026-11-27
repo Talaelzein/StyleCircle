@@ -164,6 +164,19 @@ integration("MongoDB-backed wardrobe, image and FitCheck flows", () => {
     expect(chosen.canViewResults).toBe(true);
   });
 
+  it("prevents concurrent votes from creating duplicate records", async () => {
+    const requests = ["A", "B"].map((choice) =>
+      request(app)
+        .put(`/api/fitchecks/${pollId}/vote`)
+        .set("Authorization", bearer(strangerId))
+        .send({ choice })
+    );
+
+    const results = await Promise.all(requests);
+    expect(results.map((response) => response.status).sort()).toEqual([200, 409]);
+    expect(await FitCheckVote.countDocuments({ fitCheckId: pollId, voterId: strangerId })).toBe(1);
+  });
+
   it("retains shared FitCheck images after their saved outfit and clothing are removed", async () => {
     const removeOutfit = await request(app)
       .delete(`/api/outfits/${outfitIds[0]}`)
@@ -180,5 +193,27 @@ integration("MongoDB-backed wardrobe, image and FitCheck flows", () => {
       .set("Authorization", bearer(voterId));
     expect(shared.status).toBe(200);
     expect(shared.headers["content-type"]).toMatch(/image\/png/);
+  });
+
+  it("reveals final totals after closure and refuses late votes", async () => {
+    const close = await request(app)
+      .patch(`/api/fitchecks/${pollId}/close`)
+      .set("Authorization", bearer(ownerId));
+    expect(close.status).toBe(200);
+
+    const noPriorVoteUser = "507f1f77bcf86cd799439124";
+    const finalPolls = await request(app)
+      .get("/api/fitchecks")
+      .set("Authorization", bearer(noPriorVoteUser));
+    const finalPoll = finalPolls.body.polls.find((poll) => poll._id === pollId);
+    expect(finalPoll.status).toBe("closed");
+    expect(finalPoll.canViewResults).toBe(true);
+    expect(finalPoll.votes.A + finalPoll.votes.B).toBe(2);
+
+    const tooLate = await request(app)
+      .put(`/api/fitchecks/${pollId}/vote`)
+      .set("Authorization", bearer(noPriorVoteUser))
+      .send({ choice: "B" });
+    expect(tooLate.status).toBe(400);
   });
 });

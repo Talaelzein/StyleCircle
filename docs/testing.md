@@ -25,7 +25,7 @@ npm test
 
 To run MongoDB-backed tests locally, start a **disposable** MongoDB instance and set `TEST_MONGO_URI=mongodb://127.0.0.1:27017/stylecircle_ci` before running `npm test`. Those tests use a dedicated `stylecircle_capstone_tests` database and clear it; never point test credentials at a production server. In GitHub Actions, the backend job provisions its own temporary MongoDB container. Without `TEST_MONGO_URI`, the database integration suite is skipped while unit tests still run.
 
-These checks cover React authentication and FitCheck UI actions, backend health/auth/validation, outfit matching, and (in CI) a **real disposable MongoDB-backed request test** in `server/tests/databaseIntegration.test.js`. That suite verifies cross-account access rejection, expired tokens, image-byte validation, saving outfit references, final voting, results privacy, and persistence of photos shared in FitCheck snapshots. It does **not** replace a full browser test of the production deployment or a professional security assessment.
+These checks cover React authentication and FitCheck UI actions, backend health/auth/validation, outfit matching, and (in CI) a **real disposable MongoDB-backed request test** in `server/tests/databaseIntegration.test.js`. That suite verifies cross-account access rejection, expired tokens, image-byte validation, saving outfit references, concurrent/final voting, results privacy and post-closure visibility, and persistence of photos shared in FitCheck snapshots. It does **not** replace a full browser test of the production deployment or a professional security assessment.
 
 ## Post-change checks required
 
