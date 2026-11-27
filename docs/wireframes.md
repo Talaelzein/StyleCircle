@@ -1,6 +1,6 @@
 # StyleCircle rough wireframes (Milestone 1)
 
-Low-fidelity screen sketches; subject to team review.
+Finalized low-fidelity wireframes for the Milestone 1 scope. The implemented application evolved after Milestone 1 with additional modules and an updated design system; these wireframes preserve the original design milestone.
 
 ## 1. Login / Signup
 
