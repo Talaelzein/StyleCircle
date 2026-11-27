@@ -65,8 +65,9 @@ try {
     const response = await fetch(API + path, {
       method: "POST", headers, body: JSON.stringify(data)
     });
-    assert.equal(response.status, 201, "Expected 201 from " + path + ": " + await response.text().catch(() => ""));
-    return response.json();
+    const result = await response.json().catch(() => ({}));
+    assert.equal(response.status, 201, "Expected 201 from " + path + ": " + JSON.stringify(result));
+    return result;
   }
 
   const extras = [];
