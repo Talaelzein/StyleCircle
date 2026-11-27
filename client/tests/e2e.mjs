@@ -22,7 +22,7 @@ async function audit(target, name) {
   );
   auditResults[name] = serious.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.length }));
   console.log("axe", name, "violations=", results.violations.length,
-    "serious/critical=", JSON.stringify(auditResults[name]));
+    "details=", JSON.stringify(results.violations.map(v => ({ id: v.id, impact: v.impact, nodes: v.nodes.slice(0, 18).map(n => ({ target: n.target, summary: n.failureSummary })) }))));
 }
 
 async function visit(target, path, name, { mobile = false } = {}) {
