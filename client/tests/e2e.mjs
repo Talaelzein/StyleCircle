@@ -161,6 +161,34 @@ try {
   assert.ok(viewport.documentWidth <= viewport.viewportWidth + 2,
     "Mobile page must not create horizontal page overflow: " + JSON.stringify(viewport));
 
+  // Check every principal feature in the actual mobile viewport. The
+  // accessibility scan is applied to rendered pages, not static source code.
+  for (const [route, label] of [
+    ["/wardrobe", "closet"],
+    ["/outfits", "outfit-builder"],
+    ["/fitchecks", "community-polls"],
+    ["/suggestions", "mix-and-match"],
+    ["/planner", "planner"],
+    ["/packing", "packing"],
+    ["/wishlist", "wishlist"],
+    ["/moodboards", "moodboards"],
+    ["/insights", "insights"],
+    ["/fitting-room", "ai-studio"]
+  ]) {
+    await page.goto(FRONTEND + route, { waitUntil: "networkidle" });
+    await page.locator("main").first().waitFor();
+    const findings = await checkAccessibility(label + "-mobile");
+    assert.equal(findings.length, 0,
+      label + " has serious/critical accessibility violations: " +
+      JSON.stringify(findings.map((issue) => issue.id)));
+    const overflow = await page.evaluate(() => ({
+      fullWidth: document.documentElement.scrollWidth,
+      viewport: window.innerWidth
+    }));
+    assert.ok(overflow.fullWidth <= overflow.viewport + 2,
+      label + " horizontally overflows mobile width: " + JSON.stringify(overflow));
+  }
+
   assert.deepEqual(errors, [], "React must not throw uncaught browser errors");
   assert.equal(signupIssues.length, 0,
     "Signup has serious/critical accessibility violations: " + JSON.stringify(signupIssues.map(v => v.id)));
