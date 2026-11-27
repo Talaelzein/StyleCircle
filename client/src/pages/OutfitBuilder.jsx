@@ -320,11 +320,11 @@ export default function OutfitBuilder({
           <p>Loading your wardrobe and outfits...</p>
         ) : (
           <>
-            <h3>
+            <h2 className="legacy-section-heading">
               {editingId
                 ? "Edit Outfit"
                 : "Create a New Outfit"}
-            </h3>
+            </h2>
 
             <form
               className="auth-form"

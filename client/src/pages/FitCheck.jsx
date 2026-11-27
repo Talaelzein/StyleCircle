@@ -221,7 +221,7 @@ export default function FitCheck({ token, user }) {
           <p>Loading FitChecks...</p>
         ) : (
           <>
-            <h3>Create a FitCheck</h3>
+            <h2 className="legacy-section-heading">Create a FitCheck</h2>
 
             {outfits.length < 2 ? (
               <p>

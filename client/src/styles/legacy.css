@@ -25,3 +25,7 @@
 .clothing-card h3{margin-top:0;}
 .clothing-card p,.clothing-card li{font-size:.86rem;}
 @media(max-width:720px){.shell{width:calc(100% - 34px);padding:24px 0 38px;}.shell .panel{padding:20px 16px;}.auth-shell{padding:27px 0;}.auth-shell>h1{font-size:3.7rem;}.auth-shell .panel{padding:24px 20px;}}
+
+/* The semantic section heading level is h2 below the visible h1;
+   retain the original design sizing after accessibility correction. */
+.shell .panel .legacy-section-heading { font-size: 2rem; }
