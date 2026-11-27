@@ -20,9 +20,13 @@ async function checkAccessibility(label) {
     ["serious", "critical"].includes(issue.impact)
   );
   console.log("axe", label, "total=", results.violations.length,
-    "serious/critical=", serious.map((v) =>
-      ({ id: v.id, impact: v.impact, nodes: v.nodes.length })
-    )
+    "findings=", results.violations.map((v) => ({
+      id: v.id,
+      impact: v.impact,
+      nodes: v.nodes.length,
+      targets: v.nodes.slice(0, 15).map((n) => n.target.join(", ")),
+      suggestions: v.nodes.slice(0, 3).map((n) => n.failureSummary)
+    }))
   );
   // Record findings before enforcing them. A11y is also audited manually.
   return serious;
