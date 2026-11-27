@@ -108,6 +108,28 @@ try {
   await page.getByRole("heading", { name: "E2E Casual Look" }).waitFor();
   await page.getByRole("heading", { name: "E2E Formal Look" }).waitFor();
 
+  // User-facing deletion restriction: an item in a saved outfit must survive.
+  await page.goto(FRONTEND + "/wardrobe/top", { waitUntil: "networkidle" });
+  const protectedItem = page.locator(".clothing-item").filter({
+    has: page.getByRole("heading", { name: top1.name, exact: true })
+  });
+  await protectedItem.waitFor();
+  page.once("dialog", (dialog) => dialog.accept());
+  await protectedItem.getByRole("button", { name: "Delete", exact: true }).click();
+  await page.getByRole("alert").filter({ hasText: "used in a saved outfit" }).waitFor();
+  await protectedItem.waitFor();
+
+  // A disposable, unreferenced item can still be deleted normally.
+  await makeItem(token, "E2E Disposable Top", "top");
+  await page.reload({ waitUntil: "networkidle" });
+  const disposable = page.locator(".clothing-item").filter({
+    has: page.getByRole("heading", { name: "E2E Disposable Top", exact: true })
+  });
+  await disposable.waitFor();
+  page.once("dialog", (dialog) => dialog.accept());
+  await disposable.getByRole("button", { name: "Delete", exact: true }).click();
+  await disposable.waitFor({ state: "detached" });
+
   await visit(page, "/fitchecks", "fitcheck-owner-desktop");
   await page.getByLabel("Your question").fill("E2E Which outfit wins?");
   await page.getByLabel("Outfit A").selectOption({ label: "E2E Casual Look" });
@@ -132,6 +154,8 @@ try {
   await voter.getByText("Your final vote: A").waitFor();
   assert.equal(await voter.getByRole("button", { name: "Vote for B" }).count(), 0,
     "A user must not be offered a second vote after voting");
+  await voter.reload({ waitUntil: "networkidle" });
+  await voter.getByText("Your final vote: A").waitFor();
 
   // All principal routes should remain accessible and free of critical a11y
   // violations after auth, not just the home and signup pages.
