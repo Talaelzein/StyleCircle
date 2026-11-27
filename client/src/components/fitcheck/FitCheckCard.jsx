@@ -157,7 +157,7 @@ export default function FitCheckCard({ poll, token, busyId, onVote, onShare, onC
               ) : (
                 <p className="fitcheck-vote-hint">Vote to reveal the results.</p>
               )}
-              {!poll.isOwner && poll.myVote && (
+              {!poll.isOwner && poll.myVote === choice && (
                 <p role="status" className="fitcheck-final-vote">Your final vote: {poll.myVote}</p>
               )}
 
