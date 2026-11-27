@@ -17,16 +17,16 @@ page.on("pageerror", (error) => errors.push(error.message));
 
 async function audit(target, name) {
   const results = await new AxeBuilder({ page: target }).analyze();
-  const serious = results.violations.filter((issue) =>
-    ["serious", "critical"].includes(issue.impact)
-  );
-  auditResults[name] = serious.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.length }));
+  auditResults[name] = results.violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.length }));
   console.log("axe", name, "violations=", results.violations.length,
     "details=", JSON.stringify(results.violations.map(v => ({ id: v.id, impact: v.impact, nodes: v.nodes.slice(0, 18).map(n => ({ target: n.target, summary: n.failureSummary })) }))));
 }
 
 async function visit(target, path, name, { mobile = false } = {}) {
   await target.goto(FRONTEND + path, { waitUntil: "networkidle" });
+  // Session restoration can briefly render a loading-only main with no h1.
+  // Wait for the actual route before running axe so findings are actionable.
+  await target.locator("main.app-loading").waitFor({ state: "hidden", timeout: 20000 });
   await target.locator("main").first().waitFor({ state: "visible" });
   await audit(target, name);
   const widths = await target.evaluate(() => ({
@@ -160,12 +160,12 @@ try {
     await visit(page, route, name, { mobile: true });
   }
 
-  const critical = Object.entries(auditResults)
+  const findings = Object.entries(auditResults)
     .filter(([, issues]) => issues.length > 0)
     .map(([name, issues]) => ({ name, issues }));
   assert.deepEqual(errors, [], "The browser must not throw uncaught JavaScript errors");
-  assert.deepEqual(critical, [],
-    "No route may have serious/critical axe accessibility violations");
+  assert.deepEqual(findings, [],
+    "All tested routes must have zero axe accessibility violations");
   await otherContext.close();
   console.log("Browser E2E PASS: signup, closet persistence, saved outfits, FitCheck voting, all major routes, mobile, accessibility");
 } finally {
