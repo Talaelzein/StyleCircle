@@ -143,6 +143,7 @@ npm test
 ```
 
 - [Testing and acceptance checklist](docs/testing.md)
+- [Rubric-by-rubric evaluation evidence and remaining verification](docs/grading-evidence.md)
 - [Final remediation review and regression-test evidence](docs/remediation.md)
 - [Additional strict-grading findings and what has been addressed](docs/additional-grading-findings.md)
 - [Presentation and technical Q&A guide](docs/presentation-guide.md)
