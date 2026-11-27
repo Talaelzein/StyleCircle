@@ -83,31 +83,43 @@ export default function AuthPage({ mode, onLogin }) {
           onSubmit={handleSubmit}
         >
           {isSignup && (
-            <input
-              placeholder="Username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              minLength={2}
-              required
-            />
+            <label>
+              Username
+              <input
+                placeholder="Username"
+                autoComplete="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                minLength={2}
+                required
+              />
+            </label>
           )}
 
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
+          <label>
+            Email
+            <input
+              type="email"
+              placeholder="Email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </label>
 
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            minLength={isSignup ? 8 : 1}
-            required
-          />
+          <label>
+            Password
+            <input
+              type="password"
+              placeholder="Password"
+              autoComplete={isSignup ? "new-password" : "current-password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              minLength={isSignup ? 8 : 1}
+              required
+            />
+          </label>
 
           {error && (
             <p className="error" role="alert">
