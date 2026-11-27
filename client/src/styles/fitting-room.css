@@ -78,7 +78,7 @@
 
 .auto-studio-hint,
 .auto-studio-disclaimer {
-  color: #827369;
+  color: #67564c;
   font-size: 13px;
   line-height: 1.65;
 }
@@ -167,7 +167,7 @@
 }
 
 .auto-studio-picked small {
-  color: #8c7b70;
+  color: #67564c;
 }
 
 .auto-studio-picked button {
@@ -337,7 +337,7 @@
 }
 
 .auto-studio-clothes small {
-  color: #88766b;
+  color: #67564c;
   text-transform: capitalize;
 }
 
