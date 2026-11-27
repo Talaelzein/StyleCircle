@@ -1,3 +1,11 @@
+# Earlier prototype setup (archived)
+
+**For the current project instructions, deployed links, and correct AI implementation, use [README.md](README.md).**
+
+The material below is retained only for the historical prototype; it is not the current submission guide.
+
+---
+
 # StyleCircle — All-in-One Upgrade (November 2026)
 
 This is a COMPLETE React + Express + MongoDB project ZIP. It includes the hand-painted illustrated StyleCircle starter and later 360° fitting-room/photo-analysis modules, PLUS the new styling and wardrobe features listed below. It is NOT a one-file patch.

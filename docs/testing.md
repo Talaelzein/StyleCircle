@@ -23,7 +23,13 @@ npm ci
 npm test
 ```
 
-These tests cover React login and anonymous-route behavior; FitCheck UI actions; category navigation; backend health and anonymous-access rejection; validation/error responses; and outfit-matching logic. **They do not replace a full browser or connected MongoDB integration test.**
+To run MongoDB-backed tests locally, start a **disposable** MongoDB instance and set `TEST_MONGO_URI=mongodb://127.0.0.1:27017/stylecircle_ci` before running `npm test`. Those tests use a dedicated `stylecircle_capstone_tests` database and clear it; never point test credentials at a production server. In GitHub Actions, the backend job provisions its own temporary MongoDB container. Without `TEST_MONGO_URI`, the database integration suite is skipped while unit tests still run.
+
+These checks cover React authentication and FitCheck UI actions, backend health/auth/validation, outfit matching, and (in CI) a **real disposable MongoDB-backed request test** in `server/tests/databaseIntegration.test.js`. That suite verifies cross-account access rejection, expired tokens, image-byte validation, saving outfit references, concurrent/final voting, results privacy and post-closure visibility, and persistence of photos shared in FitCheck snapshots. It does **not** replace a full browser test of the production deployment or a professional security assessment.
+
+## Post-change checks required
+
+After deploying these changes to the live app, repeat the Incognito login, wardrobe refresh, outfit creation and voting smoke checks. Specifically verify: (1) deleting a garment used by an outfit shows an understandable message and leaves the item intact; (2) after removing it from all outfits, delete works; (3) FitCheck totals are hidden before voting, a first vote works, and the choice cannot be changed; (4) shared FitCheck photos remain visible if the underlying clothing is later deleted. The CI database tests exercise these flows on a temporary database but cannot certify external hosting, GPU quota, or appearance on every device.
 
 ## Previously completed manual production smoke tests
 

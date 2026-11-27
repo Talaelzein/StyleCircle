@@ -27,6 +27,7 @@ Every protected wardrobe request filters by the authenticated `ownerId`; users c
 - Optional `occasion`, `notes`; timestamps.
 - Creating or editing outfits verifies that every referenced clothing item belongs to the logged-in user.
 - Mongoose `populate()` expands references when retrieving outfits.
+- The clothing deletion API returns HTTP 409 if a saved outfit still contains the garment, preventing new dangling wardrobe references.
 
 ## FitCheck (`FitCheck.js`)
 - `_id`: ObjectId; `ownerId`: required User reference.
@@ -35,13 +36,15 @@ Every protected wardrobe request filters by the authenticated `ownerId`; users c
 - Each piece snapshot stores `name`, `category`, `color`, `imagePublicId`, `imageUrl` so a post can retain its preview even after wardrobe edits.
 - `status`: `open` or `closed`; `photosShared`: boolean; timestamps.
 - The server prevents the poll creator from voting on their own FitCheck.
+- Vote totals are returned to the poll owner, users who have voted, and users after a poll closes; open-poll totals are hidden from other accounts.
+- GridFS images referenced by shared FitCheck look snapshots are retained even if the source wardrobe item is later removed.
 
 ## FitCheckVote (`FitCheckVote.js`)
 - `_id`: ObjectId.
 - `fitCheckId`: required ObjectId reference to FitCheck.
 - `voterId`: required ObjectId reference to User.
 - `choice`: `A` or `B`; timestamps.
-- Unique compound index: `(fitCheckId, voterId)`. Each user has one current vote per poll and can change it.
+- Unique compound index: `(fitCheckId, voterId)`. Each account has **one final vote** per poll. Changing the recorded choice returns HTTP 409.
 
 ## StyleEntry (`StyleEntry.js`)
 One persisted model serves different collections of user-created content.

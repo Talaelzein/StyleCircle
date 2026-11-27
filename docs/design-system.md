@@ -1,4 +1,4 @@
-# StyleCircle visual system — first working pass
+# StyleCircle visual system — implemented design reference
 
 ## Creative direction
 A spacious, cream-toned editorial interface with elegant serif type and expressive, visibly hand-painted fashion drawings. The fashion drawings are not generic interface icons: they are category illustrations. Real clothing photos appear **inside** My Closet after a user chooses a category.
@@ -22,3 +22,10 @@ For a simple illustration swap, keep the existing `.webp` filename and dimension
 - This pass adds illustrated intro, homepage, gallery navigation and responsive global design. It leaves existing CRUD, authentication, Outfit Builder, Smart Mix & Match, FitCheck and Fitting Room logic in place. Those feature screens get shared typography/layout styling, but **do not yet exactly match the detailed feature mockups**.
 - The images in `public/illustrations` were newly generated for the StyleCircle design exploration; review and refine before a public commercial launch.
 - The existing `.env` files were deliberately excluded from the ZIP.
+
+## Shared styling and component boundaries
+
+- `client/src/components/fitcheck/FitCheckCard.jsx` now contains the community poll card and photo preview. The page coordinates API state and actions.
+- `client/src/components/outfits/ClothingPicker.jsx` is a reusable clothing-choice grid.
+- Their surfaces, selection states, and keyboard focus indicators use `--card`, `--line`, and `--accent` tokens in `client/src/styles/site.css`, avoiding an unrelated purple selection border.
+- Legacy feature styling remains in `legacy.css` where it is still used; these changes avoid replacing the established overall visual identity.

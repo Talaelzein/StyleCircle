@@ -9,6 +9,8 @@ import ClothingItem, {
 
 import { validateBody } from "../middleware/validate.js";
 import { requireAuth } from "../middleware/requireAuth.js";
+import Outfit from "../models/Outfit.js";
+import { removeOldImageIfUnused } from "../utils/imageRetention.js";
 
 const router = Router();
 
@@ -180,44 +182,53 @@ router.patch(
 // Delete only clothing belonging to the logged-in user.
 
 router.delete("/:id", validId, async (req, res) => {
-  // Delete only an item belonging to the logged-in user.
-  const item = await ClothingItem.findOneAndDelete({
+  // Check ownership before inspecting references (no cross-account disclosure).
+  const ownedItem = await ClothingItem.findOne({
     _id: req.params.id,
     ownerId: req.userId
   });
 
-  if (!item) {
-    return res.status(404).json({
-      error: "Item not found"
+  if (!ownedItem) {
+    return res.status(404).json({ error: "Item not found" });
+  }
+
+  // Keep saved outfits complete: clients must remove the item from
+  // their outfits before deleting the underlying wardrobe record.
+  const usedInOutfit = await Outfit.exists({
+    ownerId: req.userId,
+    clothingItemIds: ownedItem._id
+  });
+
+  if (usedInOutfit) {
+    return res.status(409).json({
+      error: "This item is used in a saved outfit. Remove it from your saved outfits before deleting it."
     });
   }
 
-  // Also delete its photo from MongoDB GridFS.
-  if (
-    item.imagePublicId &&
-    mongoose.isValidObjectId(item.imagePublicId)
-  ) {
+  const item = await ClothingItem.findOneAndDelete({
+    _id: ownedItem._id,
+    ownerId: req.userId
+  });
+
+  if (!item) {
+    return res.status(404).json({ error: "Item not found" });
+  }
+
+  // FitCheck stores photo snapshots, which may outlive their outfits.
+  // Keep photo files when those shared snapshots still reference them.
+  if (item.imagePublicId && mongoose.isValidObjectId(item.imagePublicId)) {
     try {
       const bucket = new mongoose.mongo.GridFSBucket(
         mongoose.connection.db,
         { bucketName: "clothingImages" }
       );
-
-      await bucket.delete(
-        new mongoose.Types.ObjectId(item.imagePublicId)
-      );
+      await removeOldImageIfUnused(bucket, item.imagePublicId, req.userId);
     } catch (error) {
-      // The clothing item is already deleted.
-      // Log a cleanup problem without crashing the request.
-      console.error(
-        "Could not delete clothing photo:",
-        error.message
-      );
+      console.error("Could not clean up clothing photo:", error.message);
     }
   }
 
   return res.status(204).end();
 });
-
 
 export default router;

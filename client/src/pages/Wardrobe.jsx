@@ -268,7 +268,7 @@ export default function Wardrobe({ user, token, onLogout }) {
       );
 
       if (!response.ok) {
-        throw new Error("Could not delete clothing item");
+        await getResponseData(response);
       }
 
       setItems((previous) =>
