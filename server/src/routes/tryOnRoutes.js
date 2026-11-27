@@ -4,6 +4,7 @@ import multer from "multer";
 import { rateLimit } from "express-rate-limit";
 import { Client, handle_file } from "@gradio/client";
 import { requireAuth } from "../middleware/requireAuth.js";
+import { imageType } from "../utils/imageType.js";
 
 const router = Router();
 const connections = new Map();
@@ -493,18 +494,6 @@ router.post(
   "/",
   receivePhotos,
   async (req, res) => {
-    const token = process.env.HF_TOKEN?.trim();
-
-    if (
-      !token ||
-      !token.startsWith("hf_")
-    ) {
-      return res.status(503).json({
-        error:
-          "Hugging Face is not configured. Check HF_TOKEN in server/.env."
-      });
-    }
-
     const person =
       req.files?.person?.[0]?.buffer;
 
@@ -521,6 +510,26 @@ router.post(
     } catch (error) {
       return res.status(400).json({
         error: error.message
+      });
+    }
+
+    // Reject spoofed upload types before contacting any external AI provider.
+    const photos = [req.files.person[0], ...req.files.garments];
+    if (photos.some(file => imageType(file.buffer) !== file.mimetype)) {
+      return res.status(400).json({
+        error: "Invalid image content. Upload genuine JPG, PNG or WebP photos."
+      });
+    }
+
+    const token = process.env.HF_TOKEN?.trim();
+
+    if (
+      !token ||
+      !token.startsWith("hf_")
+    ) {
+      return res.status(503).json({
+        error:
+          "Hugging Face is not configured. Check HF_TOKEN in server/.env."
       });
     }
 
