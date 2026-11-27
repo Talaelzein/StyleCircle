@@ -24,7 +24,16 @@ async function checkAccessibility(label) {
       ({ id: v.id, impact: v.impact, nodes: v.nodes.length })
     )
   );
-  // Record findings before enforcing them. A11y is also audited manually.
+  if (serious.length) {
+    console.log("axe-details", label, JSON.stringify(serious.map((issue) => ({
+      rule: issue.id,
+      affected: issue.nodes.slice(0, 18).map((node) => ({
+        target: node.target,
+        html: node.html.slice(0, 200),
+        summary: node.failureSummary
+      }))
+    }))));
+  }
   return serious;
 }
 try {
