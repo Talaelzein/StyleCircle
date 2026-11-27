@@ -302,7 +302,7 @@ export default function Wardrobe({ user, token, onLogout }) {
           {error && <p className="error" role="alert">{error}</p>}
           <div className="wardrobe-category-grid">
             {closetCategories.map((category) => (
-              <CategoryCard key={category.key} category={category} count={!loading ? cardCounts[category.key] : undefined} />
+              <CategoryCard key={category.key} category={category} count={!loading ? cardCounts[category.key] : undefined} headingLevel={2} />
             ))}
           </div>
         </>

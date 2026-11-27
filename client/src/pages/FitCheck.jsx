@@ -195,10 +195,10 @@ export default function FitCheck({ token, user }) {
 
   return (
     <main className="shell">
-      <h1>Style<span>Circle</span></h1>
+
 
       <section className="panel">
-        <h2>FitCheck: A or B?</h2>
+        <h1>FitCheck: A or B?</h1>
 
         <p>
           Can't decide what to wear?

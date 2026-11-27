@@ -282,12 +282,10 @@ export default function OutfitBuilder({
 
   return (
     <main className="shell">
-      <h1>
-        Style<span>Circle</span>
-      </h1>
+
 
       <div className="panel">
-        <h2>Outfit Builder 👗</h2>
+        <h1>Outfit Builder 👗</h1>
 
         <p>
           Welcome, {user?.username || "fashion lover"}!
