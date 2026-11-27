@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import Outfit from "../models/Outfit.js";
 import ClothingItem from "../models/ClothingItem.js";
+import StyleEntry from "../models/StyleEntry.js";
 
 import { requireAuth } from "../middleware/requireAuth.js";
 import { validateBody } from "../middleware/validate.js";
@@ -221,6 +222,25 @@ router.delete(
   "/:id",
   validOutfitId,
   async (req, res) => {
+    // Check ownership first, then protect Planner/StyleEntry references.
+    const owned = await Outfit.findOne({
+      _id: req.params.id,
+      ownerId: req.userId
+    });
+    if (!owned) {
+      return res.status(404).json({ error: "Outfit not found" });
+    }
+
+    const referencedByEntry = await StyleEntry.exists({
+      ownerId: req.userId,
+      outfitId: owned._id
+    });
+    if (referencedByEntry) {
+      return res.status(409).json({
+        error: "This outfit is used in a saved planner or style entry. Remove that reference first."
+      });
+    }
+
     const outfit = await Outfit.findOneAndDelete({
       _id: req.params.id,
       ownerId: req.userId

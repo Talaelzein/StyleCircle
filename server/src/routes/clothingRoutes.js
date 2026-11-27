@@ -10,6 +10,7 @@ import ClothingItem, {
 import { validateBody } from "../middleware/validate.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import Outfit from "../models/Outfit.js";
+import StyleEntry from "../models/StyleEntry.js";
 import { removeOldImageIfUnused } from "../utils/imageRetention.js";
 
 const router = Router();
@@ -202,6 +203,17 @@ router.delete("/:id", validId, async (req, res) => {
   if (usedInOutfit) {
     return res.status(409).json({
       error: "This item is used in a saved outfit. Remove it from your saved outfits before deleting it."
+    });
+  }
+
+  // Preserve Planner/Packing/Wishlist and other StyleEntry references.
+  const referencedByEntry = await StyleEntry.exists({
+    ownerId: req.userId,
+    $or: [{ itemIds: ownedItem._id }, { checkedIds: ownedItem._id }]
+  });
+  if (referencedByEntry) {
+    return res.status(409).json({
+      error: "This clothing item is used in a saved planner, packing list, or style entry. Remove that reference first."
     });
   }
 

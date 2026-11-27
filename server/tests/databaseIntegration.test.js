@@ -195,6 +195,52 @@ integration("MongoDB-backed wardrobe, image and FitCheck flows", () => {
     expect(shared.headers["content-type"]).toMatch(/image\/png/);
   });
 
+  it("guards planner and packing references on outfit and clothing deletion", async () => {
+    const entry = await request(app)
+      .post("/api/entries")
+      .set("Authorization", bearer(ownerId))
+      .send({
+        kind: "packing",
+        title: "Weekend Bag",
+        itemIds: [itemIds[2]],
+        checkedIds: [itemIds[2]],
+        outfitId: outfitIds[1]
+      });
+    expect(entry.status).toBe(201);
+    const entryId = entry.body.entry._id;
+
+    const forbiddenOutfitDelete = await request(app)
+      .delete(`/api/outfits/${outfitIds[1]}`)
+      .set("Authorization", bearer(ownerId));
+    expect(forbiddenOutfitDelete.status).toBe(409);
+
+    const detach = await request(app)
+      .patch(`/api/entries/${entryId}`)
+      .set("Authorization", bearer(ownerId))
+      .send({ outfitId: null });
+    expect(detach.status).toBe(200);
+
+    const removeOutfit = await request(app)
+      .delete(`/api/outfits/${outfitIds[1]}`)
+      .set("Authorization", bearer(ownerId));
+    expect(removeOutfit.status).toBe(204);
+
+    const forbiddenClothingDelete = await request(app)
+      .delete(`/api/clothing-items/${itemIds[2]}`)
+      .set("Authorization", bearer(ownerId));
+    expect(forbiddenClothingDelete.status).toBe(409);
+
+    const removeEntry = await request(app)
+      .delete(`/api/entries/${entryId}`)
+      .set("Authorization", bearer(ownerId));
+    expect(removeEntry.status).toBe(204);
+
+    const removeClothing = await request(app)
+      .delete(`/api/clothing-items/${itemIds[2]}`)
+      .set("Authorization", bearer(ownerId));
+    expect(removeClothing.status).toBe(204);
+  });
+
   it("reveals final totals after closure and refuses late votes", async () => {
     const close = await request(app)
       .patch(`/api/fitchecks/${pollId}/close`)
