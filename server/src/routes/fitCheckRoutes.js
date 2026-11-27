@@ -53,6 +53,8 @@ function snapshotLook(outfit) {
 
 function publicPoll(poll, userId, votes = { A: 0, B: 0 }, myVote = null) {
   const shared = Boolean(poll.photosShared);
+  const isOwner = String(poll.ownerId) === String(userId);
+  const canViewResults = isOwner || Boolean(myVote) || poll.status === "closed";
 
   return {
     _id: poll._id,
@@ -60,7 +62,8 @@ function publicPoll(poll, userId, votes = { A: 0, B: 0 }, myVote = null) {
     status: poll.status,
     createdAt: poll.createdAt,
     photosShared: shared,
-    isOwner: String(poll.ownerId) === String(userId),
+    isOwner,
+    canViewResults,
 
     looks: poll.looks.map((look, index) => ({
       label: index === 0 ? "A" : "B",
@@ -77,7 +80,7 @@ function publicPoll(poll, userId, votes = { A: 0, B: 0 }, myVote = null) {
       }))
     })),
 
-    votes,
+    votes: canViewResults ? votes : null,
     myVote
   };
 }
@@ -237,7 +240,7 @@ router.patch("/:id/share-photos", validId, async (req, res) => {
   });
 });
 
-// PUT: Vote or change an existing vote
+// PUT: Record one final vote per user. A second choice is rejected.
 router.put(
   "/:id/vote",
   validId,
@@ -269,19 +272,25 @@ router.put(
       voterId: req.userId
     };
 
+    // Atomic insert-if-absent + the unique (fitCheckId, voterId) index
+    // prevent two concurrent requests from creating duplicate vote records.
+    // Returning 409 for changes keeps the first successful choice final.
+    let recorded;
     try {
-      await FitCheckVote.findOneAndUpdate(
+      recorded = await FitCheckVote.findOneAndUpdate(
         filter,
-        { $set: { choice } },
+        { $setOnInsert: { choice } },
         { upsert: true, new: true, runValidators: true }
       );
     } catch (error) {
       if (error.code !== 11000) throw error;
+      recorded = await FitCheckVote.findOne(filter);
+    }
 
-      await FitCheckVote.updateOne(
-        filter,
-        { $set: { choice } }
-      );
+    if (!recorded || recorded.choice !== choice) {
+      return res.status(409).json({
+        error: "Your vote is final and cannot be changed"
+      });
     }
 
     const [A, B] = await Promise.all(
@@ -296,6 +305,7 @@ router.put(
     res.json({
       message: "Vote saved successfully!",
       myVote: choice,
+      canViewResults: true,
       votes: { A, B }
     });
   }
