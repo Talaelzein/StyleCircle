@@ -60,3 +60,22 @@ jobs:
         env:
           TEST_MONGO_URI: mongodb://127.0.0.1:27017/stylecircle_ci
         run: npm test
+
+  dependency_audit:
+    name: Dependency vulnerability inventory
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Audit frontend dependencies
+        working-directory: client
+        run: |
+          npm audit --json > audit.json || true
+          node -e 'const r=require("./audit.json"); console.log("Frontend vulnerability counts:",JSON.stringify(r.metadata?.vulnerabilities||{})); console.log("HIGH/CRITICAL:", JSON.stringify(Object.entries(r.vulnerabilities||{}).filter(([n,v])=>["high","critical"].includes(v.severity)).map(([name,v])=>({name,severity:v.severity,range:v.range,fixAvailable:v.fixAvailable}))))'
+      - name: Audit backend dependencies
+        working-directory: server
+        run: |
+          npm audit --json > audit.json || true
+          node -e 'const r=require("./audit.json"); console.log("Backend vulnerability counts:",JSON.stringify(r.metadata?.vulnerabilities||{})); console.log("HIGH/CRITICAL:", JSON.stringify(Object.entries(r.vulnerabilities||{}).filter(([n,v])=>["high","critical"].includes(v.severity)).map(([name,v])=>({name,severity:v.severity,range:v.range,fixAvailable:v.fixAvailable}))))'
