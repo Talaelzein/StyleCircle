@@ -58,6 +58,91 @@ try {
   const item = (await create.json()).item;
   assert.ok(item?._id, "Created clothing item should have an ID");
 
+  // Exercise real persisted outfits and FitCheck through the browser instead
+  // of relying exclusively on direct API assertions.
+  const bearer = { "Content-Type": "application/json", Authorization: "Bearer " + state.token };
+  async function postJson(path, data, headers = bearer) {
+    const response = await fetch(API + path, {
+      method: "POST", headers, body: JSON.stringify(data)
+    });
+    assert.equal(response.status, 201, "Expected 201 from " + path + ": " + await response.text().catch(() => ""));
+    return response.json();
+  }
+
+  const extras = [];
+  for (const [name, category] of [
+    ["Browser E2E Black Trousers", "bottom"],
+    ["Browser E2E Blue Shirt", "top"],
+    ["Browser E2E White Trainers", "shoes"]
+  ]) {
+    const next = await postJson("/api/clothing-items", { name, category });
+    extras.push(next.item);
+  }
+
+  const outfitNames = ["Browser E2E Casual Look", "Browser E2E Smart Look"];
+  const selectedPairs = [
+    [item._id, extras[0]._id],
+    [extras[1]._id, extras[2]._id]
+  ];
+  const savedOutfits = [];
+  for (let i = 0; i < outfitNames.length; i += 1) {
+    const saved = await postJson("/api/outfits", {
+      name: outfitNames[i],
+      clothingItemIds: selectedPairs[i]
+    });
+    savedOutfits.push(saved.outfit);
+  }
+
+  await page.goto(FRONTEND + "/outfits", { waitUntil: "networkidle" });
+  await page.getByRole("heading", { name: "My Saved Outfits" }).waitFor();
+  for (const name of outfitNames) {
+    await page.getByRole("heading", { name }).waitFor();
+  }
+  await page.reload({ waitUntil: "networkidle" });
+  await page.getByRole("heading", { name: outfitNames[0] }).waitFor();
+  const outfitsIssues = await checkAccessibility("saved-outfits");
+
+  await page.goto(FRONTEND + "/fitchecks", { waitUntil: "networkidle" });
+  await page.getByLabel("Your question").fill("Which browser E2E look is better?");
+  await page.getByLabel("Outfit A").selectOption(savedOutfits[0]._id);
+  await page.getByLabel("Outfit B").selectOption(savedOutfits[1]._id);
+  await page.getByRole("button", { name: "Post FitCheck" }).click();
+  await page.getByText("Your FitCheck is now posted!").waitFor();
+  await page.reload({ waitUntil: "networkidle" });
+  await page.getByRole("heading", { name: "Which browser E2E look is better?" }).waitFor();
+  const fitCheckIssues = await checkAccessibility("fitcheck-owner");
+
+  // A second signed-in user must not see tallies until they vote.
+  const voterContext = await browser.newContext({ viewport: { width: 1280, height: 850 } });
+  const voterPage = await voterContext.newPage();
+  const voterErrors = [];
+  voterPage.on("pageerror", (error) => voterErrors.push(error.message));
+  await voterPage.goto(FRONTEND + "/signup", { waitUntil: "networkidle" });
+  await voterPage.getByLabel("Username").fill("E2E Voter");
+  await voterPage.getByLabel("Email").fill("stylecircle.voter." + Date.now() + "@example.com");
+  await voterPage.getByLabel("Password").fill("TestOnlyPassword123!");
+  await voterPage.getByRole("button", { name: "Sign Up" }).click();
+  await voterPage.waitForURL("**/home");
+  await voterPage.goto(FRONTEND + "/fitchecks", { waitUntil: "networkidle" });
+  await voterPage.getByRole("heading", { name: "Which browser E2E look is better?" }).waitFor();
+  assert.equal(await voterPage.getByText("Vote to reveal the results.").count(), 2);
+  await voterPage.getByRole("button", { name: "Vote for A" }).click();
+  await voterPage.getByText("Your final vote: A").waitFor();
+  assert.equal(await voterPage.getByRole("button", { name: "Vote for B" }).count(), 0);
+  await voterPage.reload({ waitUntil: "networkidle" });
+  await voterPage.getByText("Your final vote: A").waitFor();
+  assert.deepEqual(voterErrors, [], "Voter must not see uncaught browser errors");
+  const votingIssues = await new AxeBuilder({ page: voterPage }).analyze();
+  const seriousVoterIssues = votingIssues.violations.filter(
+    (issue) => ["serious", "critical"].includes(issue.impact)
+  );
+
+  // Deleting clothing that's still used in a saved outfit must be rejected.
+  const deletion = await fetch(API + "/api/clothing-items/" + item._id, {
+    method: "DELETE", headers: bearer
+  });
+  assert.equal(deletion.status, 409, "Saved outfit references must be preserved");
+
   await page.goto(FRONTEND + "/wardrobe/top");
   await page.getByText("Browser E2E White Shirt").first().waitFor();
   await page.reload({ waitUntil: "networkidle" });
@@ -80,7 +165,10 @@ try {
     "Signup has serious/critical accessibility violations: " + JSON.stringify(signupIssues.map(v => v.id)));
   assert.equal(homeIssues.length, 0,
     "Home has serious/critical accessibility violations: " + JSON.stringify(homeIssues.map(v => v.id)));
-  console.log("Browser E2E PASS: signup, database-backed wardrobe, refresh, mobile viewport, accessibility, no uncaught errors");
+  assert.equal(outfitsIssues.length, 0, "Saved Outfits has serious/critical accessibility violations");
+  assert.equal(fitCheckIssues.length, 0, "FitCheck owner page has serious/critical accessibility violations");
+  assert.equal(seriousVoterIssues.length, 0, "FitCheck voting page has serious/critical accessibility violations");
+  console.log("Browser E2E PASS: two-user FitCheck, final voting, saved outfits, referential safety, refresh, mobile, accessibility, no uncaught errors");
 } finally {
   await browser.close();
 }
