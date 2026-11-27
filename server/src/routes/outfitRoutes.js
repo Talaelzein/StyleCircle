@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import Outfit from "../models/Outfit.js";
 import ClothingItem from "../models/ClothingItem.js";
+import StyleEntry from "../models/StyleEntry.js";
 
 import { requireAuth } from "../middleware/requireAuth.js";
 import { validateBody } from "../middleware/validate.js";
@@ -221,16 +222,43 @@ router.delete(
   "/:id",
   validOutfitId,
   async (req, res) => {
-    const outfit = await Outfit.findOneAndDelete({
+    const ownedOutfit = await Outfit.findOne({
       _id: req.params.id,
       ownerId: req.userId
     });
 
-    if (!outfit) {
-      return res.status(404).json({
-        error: "Outfit not found"
+    if (!ownedOutfit) {
+      return res.status(404).json({ error: "Outfit not found" });
+    }
+
+    // A scheduled outfit must remain available for the Planner's
+    // "Mark worn" workflow. Remove it from the planner first.
+    const planned = await StyleEntry.exists({
+      ownerId: req.userId,
+      kind: "plan",
+      completed: false,
+      outfitId: ownedOutfit._id
+    });
+    if (planned) {
+      return res.status(409).json({
+        error: "This outfit is scheduled in your Planner. Remove the planned look before deleting it."
       });
     }
+
+    const outfit = await Outfit.findOneAndDelete({
+      _id: ownedOutfit._id,
+      ownerId: req.userId
+    });
+    if (!outfit) {
+      return res.status(404).json({ error: "Outfit not found" });
+    }
+
+    // Historical wear logs are retained; remove their now-invalid outfit
+    // references while preserving the original item usage information.
+    await StyleEntry.updateMany(
+      { ownerId: req.userId, outfitId: outfit._id },
+      { $set: { outfitId: null } }
+    );
 
     res.status(204).end();
   }

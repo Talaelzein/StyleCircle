@@ -10,6 +10,7 @@ import ClothingItem, {
 import { validateBody } from "../middleware/validate.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import Outfit from "../models/Outfit.js";
+import StyleEntry from "../models/StyleEntry.js";
 import { removeOldImageIfUnused } from "../utils/imageRetention.js";
 
 const router = Router();
@@ -213,6 +214,13 @@ router.delete("/:id", validId, async (req, res) => {
   if (!item) {
     return res.status(404).json({ error: "Item not found" });
   }
+
+  // Remove references from packing plans and historical wear entries so
+  // they do not display dangling IDs after a wardrobe item is removed.
+  await StyleEntry.updateMany(
+    { ownerId: req.userId, $or: [{ itemIds: item._id }, { checkedIds: item._id }] },
+    { $pull: { itemIds: item._id, checkedIds: item._id } }
+  );
 
   // FitCheck stores photo snapshots, which may outlive their outfits.
   // Keep photo files when those shared snapshots still reference them.
