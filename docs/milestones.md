@@ -35,3 +35,7 @@ This file is the requested short public progress update for each milestone. It l
 
 ## Grader access
 See the root `README.md` for installation, testing, and the exact public links. The application requires signup/login for private functionality. The Hugging Face AI generation service has daily GPU quota limits; a previously generated example is available for a demo even if the external service has no remaining quota.
+
+## Chronology limitation and tagging
+
+The initial repository commit contains both baseline scaffold and early backend work, so Milestones 1 and 2 point to the same genuine commit. Their recorded completion evidence is deliberately **not backdated**. This repository publishes separate short milestone updates here as one of the professor's allowed evidence formats. It does **not** claim that distinct historical milestone tags existed at submission time. Future projects should tag or post each milestone contemporaneously.

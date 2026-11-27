@@ -31,6 +31,14 @@ These checks cover React authentication and FitCheck UI actions, backend health/
 
 After deploying these changes to the live app, repeat the Incognito login, wardrobe refresh, outfit creation and voting smoke checks. Specifically verify: (1) deleting a garment used by an outfit shows an understandable message and leaves the item intact; (2) after removing it from all outfits, delete works; (3) FitCheck totals are hidden before voting, a first vote works, and the choice cannot be changed; (4) shared FitCheck photos remain visible if the underlying clothing is later deleted. The CI database tests exercise these flows on a temporary database but cannot certify external hosting, GPU quota, or appearance on every device.
 
+## Automated browser and accessibility checks
+
+The CI `browser_e2e` job runs Chromium against a **local React frontend and Express API connected to an isolated MongoDB service**. `client/tests/e2e.mjs` signs up a temporary test user, verifies authenticated data and persistence across a page refresh, checks a 390 px viewport, records screenshots, reports serious/critical axe-core accessibility findings, and fails on uncaught page errors. The generated screenshots and logs are uploaded as a short-lived GitHub Actions artifact. This is separate from production Vercel/Render testing.
+
+## Dependency security audit
+
+The `dependency_audit` CI job inspects npm advisories for both `client/` and `server/`. It now fails for any high or critical advisory. The earlier Vitest 3/Tinypool warnings were addressed by upgrading Vitest and the required Vite peer dependency, with both lockfiles regenerated in a GitHub runner. Audit results must always be read from the latest passing workflow; dependency risk can change over time.
+
 ## Previously completed manual production smoke tests
 
 The project owner verified on the Vercel-hosted app:
