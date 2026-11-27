@@ -155,7 +155,7 @@ export default function Planner({ token }) {
                   key={index}
                   type="button"
                   disabled={!date}
-                  aria-label={date ? `Select ${month}-${date}${planned ? ", has outfits" : ""}` : "Empty calendar cell"}
+                  aria-label={date ? `${Number(date)} — ${month}-${date}${planned ? ", has outfits" : ""}` : "Empty calendar cell"}
                   aria-pressed={selected}
                   className={`${selected ? "selected" : ""} ${planned ? "has-look" : ""}`}
                   onClick={() => setDay(`${month}-${date}`)}
