@@ -198,7 +198,7 @@ export default function FitCheck({ token, user }) {
       <h1>Style<span>Circle</span></h1>
 
       <section className="panel">
-        <h2>FitCheck: A or B?</h2>
+        <h1>FitCheck: A or B?</h1>
 
         <p>
           Can't decide what to wear?
@@ -221,7 +221,7 @@ export default function FitCheck({ token, user }) {
           <p>Loading FitChecks...</p>
         ) : (
           <>
-            <h3>Create a FitCheck</h3>
+            <h2 className="legacy-section-heading">Create a FitCheck</h2>
 
             {outfits.length < 2 ? (
               <p>

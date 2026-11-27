@@ -177,7 +177,13 @@ integration("MongoDB-backed wardrobe, image and FitCheck flows", () => {
     expect(await FitCheckVote.countDocuments({ fitCheckId: pollId, voterId: strangerId })).toBe(1);
   });
 
-  it("retains shared FitCheck images after their saved outfit and clothing are removed", async () => {
+  it("retains shared FitCheck images and cleans packing references after clothing removal", async () => {
+    const packing = await request(app)
+      .post("/api/entries")
+      .set("Authorization", bearer(ownerId))
+      .send({ kind: "packing", title: "E2E Travel Bag", itemIds: [itemIds[0]], checkedIds: [itemIds[0]] });
+    expect(packing.status).toBe(201);
+
     const removeOutfit = await request(app)
       .delete(`/api/outfits/${outfitIds[0]}`)
       .set("Authorization", bearer(ownerId));
@@ -193,6 +199,39 @@ integration("MongoDB-backed wardrobe, image and FitCheck flows", () => {
       .set("Authorization", bearer(voterId));
     expect(shared.status).toBe(200);
     expect(shared.headers["content-type"]).toMatch(/image\/png/);
+
+    const list = await request(app).get("/api/entries?kind=packing")
+      .set("Authorization", bearer(ownerId));
+    const updated = list.body.entries.find(entry => entry._id === packing.body.entry._id);
+    expect(updated.itemIds).toHaveLength(0);
+    expect(updated.checkedIds).toHaveLength(0);
+  });
+
+  it("prevents deleting a scheduled outfit and keeps past wear history", async () => {
+    const plan = await request(app).post("/api/entries")
+      .set("Authorization", bearer(ownerId))
+      .send({ kind: "plan", title: "Meeting", date: "2026-12-01", outfitId: outfitIds[1] });
+    expect(plan.status).toBe(201);
+
+    const blocked = await request(app).delete(`/api/outfits/${outfitIds[1]}`)
+      .set("Authorization", bearer(ownerId));
+    expect(blocked.status).toBe(409);
+    expect(blocked.body.error).toMatch(/Planner/);
+
+    const wear = await request(app).post("/api/entries")
+      .set("Authorization", bearer(ownerId))
+      .send({ kind: "wear", title: "Previously worn", itemIds: itemIds.slice(2), outfitId: outfitIds[1] });
+    expect(wear.status).toBe(201);
+
+    await request(app).delete(`/api/entries/${plan.body.entry._id}`)
+      .set("Authorization", bearer(ownerId)).expect(204);
+    await request(app).delete(`/api/outfits/${outfitIds[1]}`)
+      .set("Authorization", bearer(ownerId)).expect(204);
+    const list = await request(app).get("/api/entries?kind=wear")
+      .set("Authorization", bearer(ownerId));
+    const historical = list.body.entries.find(entry => entry._id === wear.body.entry._id);
+    expect(historical.outfitId).toBeNull();
+    expect(historical.itemIds).toHaveLength(2);
   });
 
   it("reveals final totals after closure and refuses late votes", async () => {

@@ -287,7 +287,7 @@ export default function OutfitBuilder({
       </h1>
 
       <div className="panel">
-        <h2>Outfit Builder 👗</h2>
+        <h1>Outfit Builder 👗</h1>
 
         <p>
           Welcome, {user?.username || "fashion lover"}!
@@ -320,11 +320,11 @@ export default function OutfitBuilder({
           <p>Loading your wardrobe and outfits...</p>
         ) : (
           <>
-            <h3>
+            <h2 className="legacy-section-heading">
               {editingId
                 ? "Edit Outfit"
                 : "Create a New Outfit"}
-            </h3>
+            </h2>
 
             <form
               className="auth-form"
