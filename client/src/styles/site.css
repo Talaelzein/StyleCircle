@@ -197,3 +197,16 @@
   margin-left: auto;
   margin-right: auto;
 }
+
+/* Consistent selection and community-voting surfaces. */
+.fitcheck-card { background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px;margin:18px 0; }
+.fitcheck-vote-hint { color:var(--muted);font-size:.9rem; }
+.fitcheck-vote-results { font-variant-numeric:tabular-nums; }
+.fitcheck-final-vote { color:var(--accent);font-weight:600; }
+.outfit-clothing-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;margin-bottom:20px; }
+.outfit-clothing-option { padding:12px;border:1px solid var(--line);background:var(--card);border-radius:12px;cursor:pointer;min-width:0; }
+.outfit-clothing-option.is-selected { padding:11px;border:2px solid var(--accent);background:var(--accent-soft); }
+.outfit-clothing-option.is-disabled { opacity:.6;cursor:not-allowed; }
+.outfit-clothing-option__row { display:flex;align-items:center;gap:12px;margin-bottom:10px; }
+.outfit-clothing-option p { color:var(--muted);font-size:.84rem; }
+.outfit-clothing-option:focus-within { outline:3px solid var(--accent);outline-offset:2px; }

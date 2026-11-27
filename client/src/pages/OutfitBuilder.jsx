@@ -7,7 +7,7 @@ import {
   getResponseData
 } from "../services/api";
 
-import ClothingPreview from "../components/ClothingPreview.jsx";
+import ClothingPicker from "../components/outfits/ClothingPicker.jsx";
 import useDraftState from "../hooks/useDraftState.js";
 
 const emptyForm = () => ({
@@ -387,76 +387,12 @@ export default function OutfitBuilder({
                 </p>
               )}
 
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns:
-                    "repeat(auto-fill, minmax(190px, 1fr))",
-                  gap: "12px",
-                  marginBottom: "20px"
-                }}
-              >
-                {clothes.map((item) => {
-                  const selected =
-                    form.clothingItemIds.includes(
-                      item._id
-                    );
-
-                  const disabled =
-                    !selected &&
-                    form.clothingItemIds.length >= 10;
-
-                  return (
-                    <label
-                      key={item._id}
-                      style={{
-                        padding: "12px",
-                        border: selected
-                          ? "2px solid #7c3aed"
-                          : "1px solid #ddd",
-                        borderRadius: "12px",
-                        cursor: disabled
-                          ? "not-allowed"
-                          : "pointer",
-                        opacity: disabled ? 0.6 : 1
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "12px",
-                          marginBottom: "10px"
-                        }}
-                      >
-                        <ClothingPreview
-                          item={item}
-                          token={token}
-                          size={90}
-                        />
-
-                        <input
-                          type="checkbox"
-                          checked={selected}
-                          disabled={disabled}
-                          onChange={() =>
-                            toggleClothing(item._id)
-                          }
-                        />
-                      </div>
-
-                      <strong>{item.name}</strong>
-
-                      <p>
-                        {item.category}
-                        {item.color
-                          ? ` — ${item.color}`
-                          : ""}
-                      </p>
-                    </label>
-                  );
-                })}
-              </div>
+              <ClothingPicker
+                clothes={clothes}
+                selectedIds={form.clothingItemIds}
+                token={token}
+                onToggle={toggleClothing}
+              />
 
               <button
                 type="submit"
