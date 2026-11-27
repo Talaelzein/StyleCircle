@@ -29,3 +29,7 @@ For a simple illustration swap, keep the existing `.webp` filename and dimension
 - `client/src/components/outfits/ClothingPicker.jsx` is a reusable clothing-choice grid.
 - Their surfaces, selection states, and keyboard focus indicators use `--card`, `--line`, and `--accent` tokens in `client/src/styles/site.css`, avoiding an unrelated purple selection border.
 - Legacy feature styling remains in `legacy.css` where it is still used; these changes avoid replacing the established overall visual identity.
+
+## Accessibility evidence
+
+Authentication inputs now have visible, programmatically associated labels and autocomplete hints. Category tiles use their visible category text as the accessible link name rather than a potentially conflicting custom `aria-label`. Browser CI uses axe-core to scan public signup and authenticated home screens for serious/critical issues, plus a 390 px viewport check. These checks complement, but do not replace, keyboard and real-device inspection.

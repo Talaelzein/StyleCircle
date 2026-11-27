@@ -210,3 +210,5 @@
 .outfit-clothing-option__row { display:flex;align-items:center;gap:12px;margin-bottom:10px; }
 .outfit-clothing-option p { color:var(--muted);font-size:.84rem; }
 .outfit-clothing-option:focus-within { outline:3px solid var(--accent);outline-offset:2px; }
+
+.saved-outfit-piece {padding:10px;border:1px solid var(--line);background:var(--card);border-radius:12px;}

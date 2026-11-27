@@ -54,7 +54,7 @@ export default function Home({ user }) {
         <div className="home-action-cards" style={{marginTop:18}}>
           <Link to="/moodboards"><span className="home-action-number">07 / INSPIRE</span><h3>Moodboards</h3><p>Keep style inspiration and creative fashion references.</p><span>Curate inspiration →</span></Link>
           <Link to="/insights"><span className="home-action-number">08 / REFLECT</span><h3>Wardrobe Insights</h3><p>Discover what you wear most and cost per wear.</p><span>Explore your data →</span></Link>
-          <Link to="/fitting-room"><span className="home-action-number">09 / TRY</span><h3>Virtual Studio</h3><p>Photo-guided body previews and a rotatable 360° avatar.</p><span>Try your style →</span></Link>
+          <Link to="/fitting-room"><span className="home-action-number">09 / TRY</span><h3>Virtual Studio</h3><p>Preview how selected wardrobe pieces might look with AI-assisted front-view try-on.</p><span>Try your style →</span></Link>
         </div>
       </section>
     </main>

@@ -5,7 +5,6 @@ export default function CategoryCard({ category, count, compact = false }) {
   return (
     <Link className={`category-card ${compact ? "category-card--compact" : ""}`}
       to={`/wardrobe/${category.key}`}
-      aria-label={`Browse ${category.label}${category.hint ? ` — ${category.hint}` : ""}`}
     >
       <div className="category-card__art">
         <img src={illustrationUrl(category.art)} alt="" loading="lazy" />

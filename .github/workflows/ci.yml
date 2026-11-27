@@ -60,3 +60,78 @@ jobs:
         env:
           TEST_MONGO_URI: mongodb://127.0.0.1:27017/stylecircle_ci
         run: npm test
+
+  dependency_audit:
+    name: Dependency vulnerability inventory
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Audit frontend dependencies
+        working-directory: client
+        run: |
+          npm audit --json > audit.json || true
+          node -e 'const r=require("./audit.json"); console.log("Frontend vulnerability counts:",JSON.stringify(r.metadata?.vulnerabilities||{})); console.log("HIGH/CRITICAL:", JSON.stringify(Object.entries(r.vulnerabilities||{}).filter(([n,v])=>["high","critical"].includes(v.severity)).map(([name,v])=>({name,severity:v.severity,range:v.range,fixAvailable:v.fixAvailable}))))'
+          npm audit --audit-level=high
+      - name: Audit backend dependencies
+        working-directory: server
+        run: |
+          npm audit --json > audit.json || true
+          node -e 'const r=require("./audit.json"); console.log("Backend vulnerability counts:",JSON.stringify(r.metadata?.vulnerabilities||{})); console.log("HIGH/CRITICAL:", JSON.stringify(Object.entries(r.vulnerabilities||{}).filter(([n,v])=>["high","critical"].includes(v.severity)).map(([name,v])=>({name,severity:v.severity,range:v.range,fixAvailable:v.fixAvailable}))))'
+          npm audit --audit-level=high
+
+  browser_e2e:
+    name: Browser E2E and accessibility
+    runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ ping: 1 })'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install application dependencies
+        run: |
+          npm ci --prefix server
+          npm ci --prefix client
+      - name: Install isolated browser test dependencies
+        working-directory: client
+        run: |
+          npm install --no-save --package-lock=false playwright@1.65.1 @axe-core/playwright@4.14.0
+          npx playwright install --with-deps chromium
+      - name: Run frontend + API with disposable MongoDB and test in Chromium
+        env:
+          MONGO_URI: mongodb://127.0.0.1:27017/stylecircle_e2e_ci
+          JWT_SECRET: stylecircle-e2e-test-secret-should-never-be-used-in-production
+          CLIENT_ORIGIN: http://localhost:5173
+          VITE_API_URL: http://localhost:3000
+          NODE_ENV: test
+        run: |
+          mkdir -p /tmp/stylecircle-browser
+          (cd server && npm start) > /tmp/stylecircle-browser/backend.log 2>&1 &
+          (cd client && npm run dev -- --host localhost --port 5173) > /tmp/stylecircle-browser/frontend.log 2>&1 &
+          ready=0
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:3000/api/health >/dev/null && curl -fsS http://localhost:5173/login >/dev/null; then ready=1; break; fi
+            sleep 2
+          done
+          if [ "$ready" != 1 ]; then cat /tmp/stylecircle-browser/*.log; exit 1; fi
+          node client/tests/e2e.mjs
+      - name: Upload browser screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stylecircle-browser-evidence
+          path: /tmp/stylecircle-browser/
+          retention-days: 7
+
