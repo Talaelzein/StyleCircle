@@ -34,3 +34,45 @@ This is a preparation guide, **not** evidence of how a past oral presentation we
 - If the AI service is quota-limited, show a previously generated genuine example and state that it was generated earlier.
 - Never claim a 360-degree garment simulation or accurate sizing.
 - For demonstrations after a deployment, verify signup/login, image persistence and the backend health endpoint again.
+
+## Rehearsable 7-minute oral presentation (adapt to professor's time limit)
+
+| Time | On-screen evidence | Spoken point |
+| --- | --- | --- |
+| 0:00–0:45 | Homepage | “StyleCircle solves a practical problem: people own clothes but waste time deciding what to wear. It combines closet organization, outfits, community feedback and an optional AI preview.” |
+| 0:45–1:30 | Architecture | “React renders the UI. Express validates and authorizes requests. MongoDB stores user data; GridFS stores private clothing photos. Vercel and Render host the client and API.” |
+| 1:30–2:25 | My Closet | Show a disposable item, editable fields, private photo upload, and persistence after page refresh. Explain JWT authorization. |
+| 2:25–3:15 | Saved Outfits / Mix & Match | Create a two-item outfit, save it, and explain how rule-based recommendations differ from the separately hosted AI model. |
+| 3:15–4:10 | FitCheck | Compare two saved outfits. Sign in as a second voter; show hidden results before voting and visible results afterward. Explain the unique database index and self-vote protection. |
+| 4:10–4:55 | Planner / Packing / Insights | Demonstrate a scheduled outfit, packing checklist and usage/cost-per-wear statistics. |
+| 4:55–5:45 | AI Style Studio | Explain the external pretrained Hugging Face model, its image-based front-view output and its GPU availability limits. Show a genuine earlier generated sample if live generation is quota-limited. |
+| 5:45–6:30 | GitHub Actions + API health | Point out MongoDB-backed tests, Chromium browser checks, axe accessibility, npm audit and the deployed endpoint. |
+| 6:30–7:00 | Conclusion | Summarize value and acknowledge that AI output is approximate, not true-to-size or a guaranteed 360-degree garment simulation. |
+
+### Strong technical answers
+
+**Where is CRUD implemented?** The Express clothing, outfit, entry and FitCheck routes expose create, read, update and delete operations, consumed by the React frontend.
+
+**Why validate on the backend?** Client-side HTML validation can be bypassed. Zod restricts payloads before they reach MongoDB.
+
+**How are user records kept private?** Authenticated routes verify a signed JWT and filter database operations by the token-derived user ID; outfit creation verifies ownership of every clothing item.
+
+**How are concurrent votes limited?** MongoDB's unique composite index on FitCheck and voter identifiers prevents duplicate vote rows; the first choice remains final.
+
+**What does HTTP 409 indicate?** A conflict with the current state, such as attempting to delete clothes still in saved outfits, deleting an actively planned outfit, or changing a final FitCheck vote.
+
+**Why GridFS?** Clothing images remain private in MongoDB and are delivered through authenticated image endpoints. FitCheck photos may be explicitly shared with signed-in community members.
+
+**What proves the application works?** The GitHub Actions suite exercises React tests/build, API tests against disposable MongoDB, browser flows, accessibility checks and dependency audits. Production availability is checked separately.
+
+**How do you handle AI quota limits?** The frontend displays a useful error and can display an authentic previously generated result; the presentation must disclose that result is not a live generation.
+
+### Presentation readiness checks
+
+- Use a demo account, never expose tokens, environment variables or personal photos on the projector.
+- Prepare two saved outfits and a second account to demonstrate community voting.
+- Verify API health, live application login and wardrobe photos before the oral demonstration.
+- Keep a real previously generated AI preview as an honestly labeled fallback.
+- Rehearse the full flow with a timer and keep the latest passing GitHub Actions run available.
+- A professional oral defense is assessed on delivery and answers, not merely the existence of slides.
+
