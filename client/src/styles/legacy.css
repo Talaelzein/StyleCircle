@@ -2,7 +2,7 @@
 .shell { width:min(calc(100% - 76px),var(--page-max)); margin:0 auto;min-height:calc(100vh - 170px);padding:38px 0 55px;display:block;text-align:left; }
 .shell:not(.auth-shell)>h1{display:none;}
 .shell .panel {width:100%;max-width:none;background:rgba(255,250,244,.65);border:1px solid var(--line);border-radius:var(--radius);padding:clamp(24px,3.5vw,52px);box-shadow:0 6px 36px rgba(54,34,29,.025);}
-.shell .panel>h2:first-child {font-size:clamp(2.35rem,4.3vw,4rem);margin:0 0 10px;}
+.shell .panel>h2:first-child, .shell .panel>h1:first-child {font-size:clamp(2.35rem,4.3vw,4rem);line-height:1.2;margin:0 0 10px;}
 .shell .panel>h3 {font-size:2rem;}
 .shell .panel p{color:var(--muted);}
 .shell .panel a{color:var(--accent);text-underline-offset:3px;}

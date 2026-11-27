@@ -287,7 +287,7 @@ export default function OutfitBuilder({
       </h1>
 
       <div className="panel">
-        <h2>Outfit Builder 👗</h2>
+        <h1>Outfit Builder 👗</h1>
 
         <p>
           Welcome, {user?.username || "fashion lover"}!
