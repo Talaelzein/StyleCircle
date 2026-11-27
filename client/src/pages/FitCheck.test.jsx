@@ -62,7 +62,7 @@ describe("StyleCircle FitCheck", () => {
       "Which outfit should I wear?"
     )).toBeInTheDocument();
 
-    expect(screen.getByText("Vote to reveal the results.")).toBeInTheDocument();
+    expect(screen.getAllByText("Vote to reveal the results.")).toHaveLength(2);
     fireEvent.click(screen.getByRole("button", {
       name: "Vote for A"
     }));
